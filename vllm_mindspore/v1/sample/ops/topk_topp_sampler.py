@@ -30,8 +30,7 @@ def apply_top_k_top_p_ms(logits, k, p):
     which is reference from 'apply_top_k_top_p_tpu' in vllm.
     """
     if k is not None:
-        # use `apply_top_k_only` defined in this file.
-        logits = apply_top_k_only(logits, k)
+        return apply_top_k_opt(logits, k, p)
 
     if p is not None:
         probs = logits.softmax(dim=-1)
@@ -163,3 +162,33 @@ def apply_top_k_only(
     top_k_mask.masked_fill_(no_top_k_mask.unsqueeze(1), -float("inf"))
     logits.masked_fill_(logits < top_k_mask, -float("inf"))
     return logits
+
+
+def apply_top_k_opt(logits, k, p):
+    '''
+    Apply top-k and top-p masks to the logits.
+    
+    This optimized version performs top-p calculations *only* on the 
+    top-k elements to get better performance.
+    '''
+    no_top_k_mask = (k == logits.shape[1])
+    k_for_topk = k.masked_fill(no_top_k_mask, 1)
+    max_top_k = k_for_topk.max()
+    int_max_top_k = max_top_k.item()
+    top_k_logits, top_k_indices = logits.topk(int_max_top_k, dim=-1)
+    indices_to_keep = mint.arange(int_max_top_k).unsqueeze(0)
+    k_mask = indices_to_keep < k.unsqueeze(1)
+    k_mask = k_mask | no_top_k_mask.unsqueeze(1)
+    top_k_logits.masked_fill_(~k_mask, -float("inf"))
+
+    if p is not None:
+        probs_k = top_k_logits.softmax(dim=-1)
+        cumprob_k = mint.cumsum(probs_k, dim=-1)
+        shifted_cumprob_k = cumprob_k - probs_k
+        top_p_mask = shifted_cumprob_k > p.unsqueeze(dim=1)
+        top_k_logits.masked_fill_(top_p_mask, -float("inf"))
+
+    final_logits = mint.full_like(logits, -float("inf"))
+    final_logits.scatter_(dim=-1, index=top_k_indices, src=top_k_logits)
+    final_logits = mint.where(no_top_k_mask.unsqueeze(1), logits, final_logits)
+    return final_logits

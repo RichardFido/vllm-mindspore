@@ -19,12 +19,14 @@
 # limitations under the License.
 """ utils for load model """
 
+import functools
 import os
 from contextlib import contextmanager
 
 from mindspore import nn
+from mindspore.nn.utils import no_init_parameters
 from vllm.config import ModelConfig, ModelImpl
-from vllm.model_executor.model_loader.utils import logger
+from vllm.model_executor.model_loader.utils import initialize_model, logger
 from vllm.model_executor.models import ModelRegistry
 
 from vllm_mindspore.model_executor.models.registry import (
@@ -206,3 +208,17 @@ def get_ms_model_architecture(
 def ms_device_loading_context(module, target_device):
     yield module
     return
+
+
+_original_initialize_model = initialize_model
+
+
+@functools.wraps(_original_initialize_model)
+def initialize_model(*args, **kwargs):
+    '''
+    Apply deferred initialization to reduce peak memory.
+    This avoids allocating unnecessary memory for parameters
+    during the __init__ phase.
+    '''
+    with no_init_parameters():
+        return _original_initialize_model(*args, **kwargs)

@@ -182,6 +182,20 @@ class AscendPlatform(Platform):
                     quant_action.choices.extend(ASCEND_QUANTIZATION_METHOD)
                     logger.debug("--quantization support ascend/golden-stick.")
 
+    @classmethod
+    def make_materializing_weight_loader(cls, original_weight_loader):
+        """
+        Ensure the parameter is materialized before loading weights, 
+        as required by deferred initialization.
+        """
+
+        def _materialize_and_load(param, *args, **kwargs):
+            param.init_data()
+            out = original_weight_loader(param, *args, **kwargs)
+            return out
+
+        return _materialize_and_load
+
     @property
     def supported_dtypes(self) -> list[torch.dtype]:
         if is_310p():

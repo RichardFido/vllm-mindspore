@@ -30,6 +30,11 @@ def set_weight_attrs(
     if weight_attrs is None:
         return
     for key, value in weight_attrs.items():
+        from vllm.platforms import current_platform
+
+        # materializing param before weight loader.
+        if key == "weight_loader":
+            value = current_platform.make_materializing_weight_loader(value)
         setattr(weight, key, value)
 
 
