@@ -37,6 +37,10 @@ def compile_or_warm_up_model(self) -> None:
     max_num_reqs = 1
     # Only pp_last_rank has lm_head, which is required by _dummy_sampler_run.
 
+    # capture decode aclgraph
+    if not self.model_config.enforce_eager:
+        self.model_runner.capture_model()
+
     # We skip EPLB here since we don't want to record dummy metrics
     hidden_states, last_hidden_states = \
         self.model_runner._dummy_run(

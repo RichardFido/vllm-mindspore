@@ -140,6 +140,13 @@ class MsModelBase:
         self.load_config = vllm_config.load_config
         self.scheduler_config = vllm_config.scheduler_config
 
+        # aclgraph need construct block table with real input
+        # here must know max_model_len and block_size
+        # for speculative infer, this value need update
+        self.block_size = self.cache_config.block_size
+        self.max_model_len = vllm_config.model_config.max_model_len
+        self.max_block_num = int(self.max_model_len / self.block_size)
+
         self.modules_dict: Optional[dict[str, nn.Cell]] = None
 
         self.enable_chunked_prefill = (
@@ -305,7 +312,7 @@ class MsModelBase:
         # context len is 0 for prefill, and 1 for chunked and decode.
         context_lens_tensor = ms.Tensor([0], dtype=ms.int32) if not (
             self.has_prefill_warmup) else ms.Tensor([1], dtype=ms.int32)
-        block_tables = ms.Tensor([[0]], dtype=ms.int32)
+        block_tables = ms.Tensor([[0] * self.max_block_num], dtype=ms.int32)
         slot_mapping = [-1 for _ in range(input_len)]
         slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
         return MsAttentionMetadata(

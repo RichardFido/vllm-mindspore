@@ -18,21 +18,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
 import traceback
-from typing import Optional, Union, cast
+from typing import Any, Optional, Union, cast
 
 import mindspore as ms
 import numpy as np
 import torch
+import vllm.envs as envs
 from mindspore import Generator as msGenerator
 from mindspore import Tensor, mint, mutable
 from typing_extensions import TypeAlias
 from vllm.attention import AttentionType
-from vllm.config import get_layers_from_vllm_config
+from vllm.config import (CompilationLevel, CUDAGraphMode,
+                         get_layers_from_vllm_config)
 from vllm.distributed.parallel_state import get_pp_group
+from vllm.forward_context import set_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.models.interfaces_base import VllmModelForPooling
 from vllm.sampling_params import SamplingType
+from vllm.utils import round_up
 from vllm.v1.attention.backends.flash_attn import AttentionMetadata
 from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadataBuilder
 from vllm.v1.attention.backends.utils import (CommonAttentionMetadata,
@@ -44,6 +49,7 @@ from vllm.v1.outputs import ModelRunnerOutput
 from vllm.v1.spec_decode.eagle import EagleProposer
 from vllm.v1.spec_decode.metadata import SpecDecodeMetadata
 from vllm.v1.worker.gpu_input_batch import CachedRequestState
+from vllm.v1.worker.gpu_model_runner import GPUModelRunner
 from vllm.v1.worker.ubatch_splitting import ubatch_split
 from vllm.v1.worker.ubatch_utils import UBatchSlices
 from vllm.v1.worker.utils import bind_kv_cache
@@ -82,6 +88,9 @@ def _prepare_inputs(
     assert total_num_scheduled_tokens > 0
     num_reqs = self.input_batch.num_reqs
     assert num_reqs > 0
+
+    # vllm-mindspore aclgraph only support pure decode
+    self.pure_decode = num_reqs == total_num_scheduled_tokens
 
     # OPTIMIZATION: Start copying the block table first.
     # This way, we can overlap the copy with the following CPU operations.
@@ -176,17 +185,22 @@ def _prepare_inputs(
     self.input_batch.block_table.commit_slot_mapping(
         total_num_scheduled_tokens)
 
+    num_tokens_unpadded = scheduler_output.total_num_scheduled_tokens
+    num_tokens_padded = num_tokens_unpadded
+    num_reqs_padded = num_reqs
+    if self.pure_decode:
+        num_tokens_padded = num_tokens_unpadded + self.get_local_padding(
+            num_tokens_unpadded)
+        num_reqs_padded = num_tokens_padded
+
     # Prepare the attention metadata.
     self.query_start_loc.np[0] = 0
     self.query_start_loc.np[1:num_reqs + 1] = cu_num_tokens
     # Note: pad query_start_loc to be non-decreasing, as kernels
     # like FlashAttention requires that
     self.query_start_loc.np[num_reqs + 1:].fill(cu_num_tokens[-1])
-    q_seq_lens_np = np.diff(self.query_start_loc.np[:num_reqs + 1])
+    q_seq_lens_np = np.diff(self.query_start_loc.np[:num_reqs_padded + 1])
 
-    num_tokens_unpadded = scheduler_output.total_num_scheduled_tokens
-    num_tokens_padded = num_tokens_unpadded + self.get_local_padding(
-        num_tokens_unpadded)
     uniform_decode = \
         (max_num_scheduled_tokens == self.uniform_decode_query_len) and \
         (total_num_scheduled_tokens == num_reqs * max_num_scheduled_tokens)
@@ -201,10 +215,10 @@ def _prepare_inputs(
         self.input_batch.num_computed_tokens_cpu[:num_reqs] +
         num_scheduled_tokens)
     # Fill unused with 0 for full cuda graph mode.
-    self.seq_lens.np[num_reqs:].fill(0)
+    self.seq_lens.np[num_reqs_padded:].fill(0)
     self.seq_lens.copy_to_gpu()
-    seq_lens = self.seq_lens.gpu[:num_reqs]
-    max_seq_len = self.seq_lens.np[:num_reqs].max().item()
+    seq_lens = self.seq_lens.gpu[:num_reqs_padded]
+    max_seq_len = self.seq_lens.np[:num_reqs_padded].max().item()
 
     num_tokens = [
         self.requests[r].num_tokens for r in self.input_batch.req_ids
@@ -295,9 +309,8 @@ def _prepare_inputs(
             scheduler_output, kv_cache_group_spec.kv_cache_spec, num_reqs)
 
         blk_table = self.input_batch.block_table[kv_cache_group_id]
-        blk_table_tensor = blk_table.get_device_tensor(num_reqs)
-        slot_mapping_np = blk_table.slot_mapping.np[:
-                                                    total_num_scheduled_tokens]
+        blk_table_tensor = blk_table.get_device_tensor(num_reqs_padded)
+        slot_mapping_np = blk_table.slot_mapping.np[:num_tokens_padded]
 
         # Fill unused with -1. Needed for reshape_and_cache in full cuda
         # graph mode.
@@ -311,7 +324,7 @@ def _prepare_inputs(
             q_seq_lens_np=q_seq_lens_np,
             seq_lens=seq_lens,
             seq_lens_cpu=None,
-            seq_lens_np=self.seq_lens.np[:num_reqs],
+            seq_lens_np=self.seq_lens.np[:num_reqs_padded],
             num_computed_tokens_cpu=None,
             num_computed_tokens_np=self.input_batch.
             num_computed_tokens_cpu[:num_reqs],
@@ -386,6 +399,29 @@ def _prepare_inputs(
     return (attn_metadata, logits_indices, spec_decode_metadata,
             num_scheduled_tokens, spec_decode_common_attn_metadata,
             max_num_scheduled_tokens, ubatch_slices, num_tokens_after_padding)
+
+
+def _get_num_input_tokens(self, num_scheduled_tokens: int) -> int:
+    if hasattr(self, "pure_decode") and not self.pure_decode:
+        return num_scheduled_tokens
+
+    if (self.compilation_config.cudagraph_mode != CUDAGraphMode.NONE
+            and not envs.VLLM_DISABLE_PAD_FOR_CUDAGRAPH
+            and hasattr(self, "cudagraph_batch_sizes")
+            and self.cudagraph_batch_sizes
+            and num_scheduled_tokens <= self.cudagraph_batch_sizes[-1]):
+        # Use CUDA graphs.
+        # Add padding to the batch size.
+        return self.vllm_config.pad_for_cudagraph(num_scheduled_tokens)
+
+    # Eager mode.
+    # Pad tokens to multiple of tensor_parallel_size when
+    # enabled collective fusion for SP
+    tp_size = self.vllm_config.parallel_config.tensor_parallel_size
+    if (self.compilation_config.pass_config.enable_sequence_parallelism
+            and tp_size > 1):
+        return round_up(num_scheduled_tokens, tp_size)
+    return num_scheduled_tokens
 
 
 def create_block(shape, dtype, name=None, device=None):
@@ -1064,3 +1100,136 @@ def get_dp_padding(self, num_tokens: int):
     # padded based on `num_tokens_across_dp`, while the model only accepts
     # inputs with actual shape.
     return 0, None
+
+
+def _aclgraph_capture_dummy_run(
+    self: GPUModelRunner,
+    num_tokens: int,
+    skip_attn: bool = True,
+):
+    # Padding for DP
+    num_pad, num_tokens_across_dp = self.get_dp_padding(num_tokens=num_tokens)
+    num_tokens += num_pad
+
+    # Set num_scheduled_tokens based on num_tokens and max_num_seqs
+    # for dummy run with LoRA so that the num_reqs collectively
+    # has num_tokens in total.
+
+    assert num_tokens <= self.scheduler_config.max_num_batched_tokens
+    max_num_reqs = self.scheduler_config.max_num_seqs
+    num_reqs = min(num_tokens, max_num_reqs)
+    min_tokens_per_seq = num_tokens // num_reqs
+    num_scheduled_tokens_list = [min_tokens_per_seq] * num_reqs
+    num_scheduled_tokens_list[-1] += num_tokens % num_reqs
+    assert sum(num_scheduled_tokens_list) == num_tokens
+    assert len(num_scheduled_tokens_list) == num_reqs
+    num_scheduled_tokens = np.array(num_scheduled_tokens_list, dtype=np.int32)
+    if skip_attn:
+        attn_metadata: Optional[dict[str, Any]] = None
+    else:
+        # Make sure max_model_len is used at the graph capture time.
+        self.seq_lens_np[:num_reqs] = self.max_model_len
+        self.seq_lens_np[num_reqs:] = 0
+        self.seq_lens[:num_reqs].copy_(self.seq_lens_cpu[:num_reqs],
+                                       non_blocking=True)
+
+        attn_metadata = {}
+
+        # Prepare the attention memdata for each KV cache group and make layers
+        # in the same group share the same metadata.
+        for kv_cache_group_id, kv_cache_group_spec in enumerate(
+                self.kv_cache_config.kv_cache_groups):
+            # Prepare for cascade attention if enable & beneficial.
+            common_prefix_len = 0
+            attn_metadata_i = (
+                self.attn_metadata_builders[kv_cache_group_id].build(
+                    num_reqs=num_reqs,
+                    num_actual_tokens=num_tokens,
+                    max_query_len=num_tokens,
+                    common_prefix_len=common_prefix_len,
+                ))
+            # disable prefill by set max_context_len != 0
+            attn_metadata_i.max_context_lens = 1
+            for layer_name in kv_cache_group_spec.layer_names:
+                attn_metadata[layer_name] = attn_metadata_i
+
+    with self.maybe_dummy_run_with_lora(
+            self.lora_config, num_scheduled_tokens=num_scheduled_tokens):
+        model = self.model
+        input_ids = self.input_ids.cpu[:num_tokens]
+        inputs_embeds = None
+        positions = self.positions.cpu[:num_tokens]
+
+        if get_pp_group().is_first_rank:
+            intermediate_tensors = None
+        else:
+            if self.intermediate_tensors is None:
+                self.intermediate_tensors = (
+                    self.model.make_empty_intermediate_tensors(
+                        batch_size=self.max_num_tokens,
+                        dtype=self.model_config.dtype,
+                        device=self.device))
+            intermediate_tensors = self.sync_and_slice_intermediate_tensors(
+                num_tokens, None, False)
+
+        with self.maybe_randomize_inputs(input_ids), set_forward_context(
+                attn_metadata,
+                self.vllm_config,
+                num_tokens=num_tokens,
+                num_tokens_across_dp=num_tokens_across_dp):
+            outputs = model(
+                input_ids=input_ids,
+                positions=positions,
+                intermediate_tensors=intermediate_tensors,
+                inputs_embeds=inputs_embeds,
+            )
+        hidden_states = outputs
+
+    logit_indices = np.cumsum(num_scheduled_tokens) - 1
+    return hidden_states[logit_indices]
+
+
+def capture_model(self: GPUModelRunner) -> None:
+    if self.compilation_config.level != CompilationLevel.PIECEWISE or \
+        self.compilation_config.cudagraph_mode != CUDAGraphMode.PIECEWISE:
+        logger.warning("AclGraph is disabled, "
+                       "please enable it by passing -O 3.")
+        return
+
+    start_time = time.perf_counter()
+    start_free_gpu_memory = torch.cuda.mem_get_info()[0]
+
+    # Trigger aclgraph capture for specific shapes
+    # Capture the large shapes first so that the smaller shapes
+    # can reuse the memory poll allocated for the large shapes.
+
+    # vllm-mindspore use full graph to capture aclgraph
+    # set the skip_attn to True
+    skip_attn = True
+
+    # because aclgraph limit, check the capture size
+    max_capture_graph_size = 19
+    if len(self.cudagraph_batch_sizes) > max_capture_graph_size:
+        logger.warning(
+            "Capture size is too much for aclgraph capture,"
+            "capture %d instead", max_capture_graph_size)
+        self.cudagraph_batch_sizes = self.cudagraph_batch_sizes[:
+                                                                max_capture_graph_size]
+
+    # enable mindspore graph capture
+    ms.set_kernel_launch_capture(True,
+                                 op_capture_skip=["moveto", "custom_mla"])
+    for num_tokens in reversed(self.cudagraph_batch_sizes):
+        for _ in range(
+                self.vllm_config.compilation_config.cudagraph_num_of_warmups):
+            _aclgraph_capture_dummy_run(self, num_tokens, skip_attn=skip_attn)
+        _aclgraph_capture_dummy_run(self, num_tokens, skip_attn=skip_attn)
+
+    end_time = time.perf_counter()
+    end_free_gpu_memory = torch.cuda.mem_get_info()[0]
+    elapsed_time = end_time - start_time
+    cuda_graph_size = start_free_gpu_memory - end_free_gpu_memory
+    logger.info("Graph capturing finished in %.0f secs, took %.2f GiB",
+                elapsed_time, cuda_graph_size / (1 << 30))
+
+    # disable mindspore graph capture (captured graphs replay still work)

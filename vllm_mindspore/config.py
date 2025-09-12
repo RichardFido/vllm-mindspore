@@ -22,6 +22,7 @@ import socket
 import threading
 import time
 from collections import Counter
+from dataclasses import field
 from typing import Any, Literal, Optional, Union
 
 import msgspec
@@ -34,6 +35,7 @@ from vllm.config.compilation import (CompilationConfig, CompilationLevel,
                                      CUDAGraphMode)
 from vllm.config.model import (_STR_DTYPE_TO_TORCH_DTYPE, _find_dtype,
                                _resolve_auto_dtype)
+from vllm.config.scheduler import SchedulerConfig
 from vllm.logger import init_logger
 from vllm.utils import random_uuid
 
@@ -81,6 +83,7 @@ def vllm_config_post_init(self):
 
     if self.compilation_config is None:
         self.compilation_config = CompilationConfig()
+    self.compilation_config.cudagraph_mode = CUDAGraphMode.NONE
     if envs.VLLM_USE_V1 and self.model_config is not None and \
         not self.model_config.enforce_eager:
         # NOTE(woosuk): Currently, we use inductor because the piecewise
@@ -93,15 +96,13 @@ def vllm_config_post_init(self):
         self.compilation_config.cudagraph_num_of_warmups = 0
         self.compilation_config.pass_config.enable_fusion = False
         self.compilation_config.pass_config.enable_noop = False
-        # When level is set to CompilationLevel.PIECEWISE, vllm will use cuda
-        # graph, which means the model inputs will be padded to cuda graph
-        # acceptable size, but it is not for mindspore.
-        # So here set to CompilationLevel.DYNAMO_AS_IS.
-        self.compilation_config.level = CompilationLevel.NO_COMPILATION
-        # Set a small compile_sizes for warmup. '20' is not in
-        # 'cudagraph_capture_sizes'. So the warmup can be run.
         self.compilation_config.compile_sizes = [0]
-    self.compilation_config.cudagraph_mode = CUDAGraphMode.NONE
+
+        if self.compilation_config.level is None:
+            # the default value will change to piecewise in future
+            logger.warning_once(
+                "vllm-mindspore use no_compilation as default.")
+            self.compilation_config.level = CompilationLevel.NO_COMPILATION
 
     self._set_cudagraph_sizes()
 
@@ -390,3 +391,17 @@ class _CacheConfig(CacheConfig):
     """Data type for kv cache storage. If "auto", will use model data type.
     CUDA 11.8+ supports fp8 (=fp8_e4m3) and fp8_e5m2. ROCm (AMD GPU) supports
     fp8 (=fp8_e4m3)."""
+
+
+@dataclass
+class _SchedulerConfig(SchedulerConfig):
+    '''Scheduler configuration'''
+
+    cuda_graph_sizes: list[int] = field(default_factory=lambda: [128])
+    """Cuda graph capture sizes, default is 128.
+    vllm-mindspore use aclgraph, current aclgraph has graph number limit,
+    so the capture size default is 128, uses cannot set to large
+    1. if one value is provided, then the capture list would follow the
+    pattern: [1, 2, 4] + [i for i in range(8, cuda_graph_sizes + 1, 8)]
+    2. more than one value (e.g. 1 2 128) is provided, then the capture list
+    will follow the provided list."""

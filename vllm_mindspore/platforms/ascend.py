@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Optional, Union
 
 import torch
 import vllm.envs as envs
+from vllm.config.compilation import CompilationLevel, CUDAGraphMode
 from vllm.logger import init_logger
 from vllm.platforms.interface import Platform, PlatformEnum
 
@@ -107,6 +108,14 @@ class AscendPlatform(Platform):
 
         model_config = vllm_config.model_config
         model_config.disable_cascade_attn = True
+
+        vllm_config.compilation_config.splitting_ops = list(
+            vllm_config.compilation_config._attention_ops)
+        if vllm_config.compilation_config.level == CompilationLevel.PIECEWISE:
+            # aclgraph only support piecewise capture mode
+            vllm_config.compilation_config.cudagraph_mode \
+                                            = CUDAGraphMode.PIECEWISE
+            vllm_config.compilation_config.cudagraph_num_of_warmups = 1
 
     @classmethod
     def get_attn_backend_cls(cls, selected_backend, head_size, dtype,
