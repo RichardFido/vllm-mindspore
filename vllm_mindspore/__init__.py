@@ -37,6 +37,8 @@ from vllm_mindspore.scripts import env_setup
 
 env_setup()
 
+is_dispatch_req_only_by_p0_for_dp = True
+
 # 2. update the log configuration ahead of other modifications.
 import vllm_mindspore.logger  # noqa F401
 
@@ -556,20 +558,30 @@ from vllm.model_executor.models.registry import _ModelRegistry
 
 _ModelRegistry._normalize_archs = _normalize_archs
 
-from vllm_mindspore.v1.engine.core_client import (MsCoreEngine,
-                                                  get_core_engine_for_request,
-                                                  add_request_async,
-                                                  process_engine_outputs)
+if is_dispatch_req_only_by_p0_for_dp:
+    # In v0.9.1, new requests were dispatched based on the processing status
+    # reported by each EngineCore (p1) for previously published requests.
+    # This approach was sensitive to inter-process latency, which led to load
+    # imbalance and degraded performance. By recording request-processing status
+    # directly in the EngineClient (p0) and dispatching from there, we can
+    # achieve more balanced load distribution.
+    # However, relying solely on EngineClient state restricts more flexible
+    # strategies (e.g., external load balancing). This should be made optional
+    # in the future.
+    from vllm_mindspore.v1.engine.core_client import (
+        MsCoreEngine, get_core_engine_for_request, add_request_async,
+        process_engine_outputs)
 
-vllm.entrypoints.cli.serve.CoreEngine = MsCoreEngine
-vllm.v1.engine.core_client.CoreEngine = MsCoreEngine
-vllm.v1.utils.CoreEngine = MsCoreEngine
+    vllm.entrypoints.cli.serve.CoreEngine = MsCoreEngine
+    vllm.v1.engine.core_client.CoreEngine = MsCoreEngine
+    vllm.v1.utils.CoreEngine = MsCoreEngine
 
-from vllm.v1.engine.core_client import DPAsyncMPClient
+    from vllm.v1.engine.core_client import DPAsyncMPClient
 
-DPAsyncMPClient.get_core_engine_for_request = get_core_engine_for_request
-DPAsyncMPClient.add_request_async = add_request_async
-DPAsyncMPClient.process_engine_outputs = staticmethod(process_engine_outputs)
+    DPAsyncMPClient.get_core_engine_for_request = get_core_engine_for_request
+    DPAsyncMPClient.add_request_async = add_request_async
+    DPAsyncMPClient.process_engine_outputs = staticmethod(
+        process_engine_outputs)
 
 from vllm_mindspore.v1.engine.processor import (
     v1_process_validate_sampling_params, v1_process_validate_structured_output)
