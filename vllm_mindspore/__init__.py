@@ -282,7 +282,7 @@ vllm.v1.utils.CoreEngineActorManager.__init__ = core_engine_actor_manager_init
 from .config import (_verify_quantization, _verify_args, vllm_config_post_init,
                      vllm_config_get_quantization_config, model_post_init,
                      _get_and_verify_dtype, stateless_init_dp_group,
-                     has_unfinished_dp, v1_process_validate_sampling_params)
+                     has_unfinished_dp)
 
 vllm.config.ModelConfig._verify_quantization = _verify_quantization
 vllm.config.VllmConfig.__post_init__ = vllm_config_post_init
@@ -571,8 +571,11 @@ DPAsyncMPClient.get_core_engine_for_request = get_core_engine_for_request
 DPAsyncMPClient.add_request_async = add_request_async
 DPAsyncMPClient.process_engine_outputs = staticmethod(process_engine_outputs)
 
+from vllm_mindspore.v1.engine.processor import (
+    v1_process_validate_sampling_params, v1_process_validate_structured_output)
 from vllm.v1.engine.processor import Processor
 
 Processor._validate_sampling_params = v1_process_validate_sampling_params
+Processor._validate_structured_output = v1_process_validate_structured_output
 
 check_ready()
