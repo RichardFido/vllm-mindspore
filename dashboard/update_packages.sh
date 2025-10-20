@@ -26,10 +26,10 @@ else
     DATE_ARG=""
 fi
 
-python update_package.py mindspore --no-cleanup $DATE_ARG
-python update_package.py mindformers --no-cleanup $DATE_ARG
-python update_package.py golden-stick --no-cleanup --whl-keyword mindspore_gs $DATE_ARG
-python update_package.py msadapter --no-cleanup $DATE_ARG
+python update_package.py mindspore --branch r2.7.1 --no-cleanup $DATE_ARG
+python update_package.py mindformers --branch r1.7.0 --no-cleanup $DATE_ARG
+python update_package.py golden-stick --branch r1.3.0 --no-cleanup --whl-keyword mindspore_gs $DATE_ARG
+python update_package.py msadapter --branch r0.3.0 --no-cleanup $DATE_ARG
 python update_package.py vllm-mindspore --no-cleanup --whl-keyword vllm_mindspore $DATE_ARG
 
 
