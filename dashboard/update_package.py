@@ -95,13 +95,13 @@ def get_branch_url(day_url,
         return urljoin(day_url, dirs[0])
 
     if fixed:
-        master_dirs = [
+        candidate_dirs = [
             a["href"] for a in soup.find_all("a", href=True)
-            if "master_" in a["href"].lower()
+            if branch_keyword.lower() in a["href"].lower()
         ]
-        if not master_dirs:
-            raise RuntimeError(f"未找到 master_*_newest 目录: {day_url}")
-        return urljoin(day_url, sorted(master_dirs)[-1])
+        if not candidate_dirs:
+            raise RuntimeError(f"未找到匹配 {branch_keyword} 的目录: {day_url}")
+        return urljoin(day_url, sorted(candidate_dirs)[-1])
     else:
         candidate_dirs = [
             a["href"] for a in soup.find_all("a", href=True)
@@ -112,9 +112,13 @@ def get_branch_url(day_url,
         return urljoin(day_url, sorted(candidate_dirs)[-1])
 
 
-def extract_commit_id(branch_url, whl_url=None):
-    match = re.search(r'master_\d+_([0-9a-f]+)_newest', branch_url,
-                      re.IGNORECASE)
+def extract_commit_id(fixed_path, branch_keyword, branch_url, whl_url=None):
+    if fixed_path:
+        match = re.search(branch_keyword + r'_\d+_([0-9a-f]+)', branch_url,
+                          re.IGNORECASE)
+    else:
+        match = re.search(branch_keyword + r'_\d+_([0-9a-f]+)_newest',
+                          branch_url, re.IGNORECASE)
     if match:
         return match.group(1)[:8]
     if whl_url:
@@ -217,11 +221,12 @@ def update_package(package_name,
                                 branch_keyword=branch_keyword,
                                 commit_id=commit_id,
                                 fixed=fixed_path)
-    print(f"最新 master 目录: {branch_url}")
+    print(f"最新 {branch_keyword} 目录: {branch_url}")
 
     pkg_url = find_whl_by_subdirs(branch_url, py_major, py_minor,
                                   whl_name_keyword)
-    commit_id = commit_id or extract_commit_id(branch_url, pkg_url)
+    commit_id = commit_id or extract_commit_id(fixed_path, branch_keyword,
+                                               branch_url, pkg_url)
     print(f"使用 commit_id: {commit_id}")
 
     filepath = download_package(pkg_url, day_str, commit_id, package_name)
