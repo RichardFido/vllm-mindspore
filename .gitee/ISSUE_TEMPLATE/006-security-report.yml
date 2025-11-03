@@ -1,4 +1,5 @@
 name: ⚡Report a security vulnerability
+title: "[Security]: "
 labels: ["security"]
 body:
   - type: textarea
@@ -21,6 +22,7 @@ body:
     attributes:
       label: 版本信息
       description: 如果涉及多个版本，请悉数告知我们对应的版本号信息，以方便我们复现问题
+      placeholder: "例如：vLLM-MindSpore v0.3.0, MindSpore v2.7.1，或提供官网配套版本链接"
     validations:
       required: true
   - type: markdown

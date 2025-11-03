@@ -20,6 +20,8 @@
 ---
 
 **What does this PR do / why do we need it**:
+<!-- 请在下一行填写概要，不要删除下方分割线；与分割线之间保留一个空行 -->
+在此行填写本 PR 的概要（中/英均可）。Please write the summary here.
 
 ---
 
@@ -33,10 +35,18 @@ Fixes #
 ---
 
 **Test Plan and Test result：What scenarios were tested, and what were the verification results（Function, performance, reliability, etc.）**：
+<!-- 请在下一行按要点列出测试计划与结果；与下方分割线保持一个空行 -->
+在此行填写测试计划与结果要点（可用清单列出）。Please list the test plan and results here.
 
 ---
 
-**Self-checklist**:（**请自检，在[ ]内打上x，我们将检视你的完成情况，否则会导致pr无法合入**）
+**Self-checklist**:（**请自检，在[ ]内打上x代表已确认完成，我们将检视你的完成情况，否则会导致pr无法合入**）
+
+<!-- 指引：
+1. 编辑模式：将 [ ] 改为 [x] 完成勾选；
+2. 阅读模式：可直接点击复选框完成勾选；
+3. 接口、文档检查项，完成勾选当未提供相关材料的，认为是不涉及；若涉及修改则应提供相应佐证材料；如与实际情况不符则pr无法合入
+-->
 
 + - [ ] **设计**：PR对应的方案是否已经经过Maintainer评审，方案检视意见是否均已答复并完成方案修改
 + - [ ] **测试**：PR中的代码是否已有UT/ST测试用例进行充分的覆盖，新增测试用例是否随本PR一并上库或已经上库

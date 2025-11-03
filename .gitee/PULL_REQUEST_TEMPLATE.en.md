@@ -30,7 +30,12 @@ Fixes #
 * Need to describe clearly
 
 
-**Self-checklist**:（**Please check carefully,and mark an x in the [] brackets. We will review your completion status.**）
+**Self-checklist**:（**Please check carefully, and mark an x in the [] brackets. We will review your completion status.**）
+
+<!-- Guidance:
+1. Edit mode: change [ ] to [x] to check.
+2. Preview mode: click the checkbox to check.
+3. For Interface/Documentation checks: if checked but no materials are provided, it will be regarded as Not involved; if the change involves the item, the corresponding evidence must be attached; if inconsistent with reality, the PR cannot be merged. -->
 
 + - [ ] **Design**: Has the solution corresponding to the PR been reviewed by the Maintainer, and have all review comments been replied to and revised
 + - [ ] **Test**: Has the code in the PR been fully covered by UT/ST test cases, and have the newly added test cases been uploaded to the repository along with this PR or already uploaded.
