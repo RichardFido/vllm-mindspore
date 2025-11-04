@@ -115,17 +115,10 @@ follow_imports = "silent"
 # move the directory here and remove it from tools/mypy.sh
 files = [
     "vllm_mindspore/*.py",
-    "vllm_mindspore/adapter_commons",
-    "vllm_mindspore/assets",
     "vllm_mindspore/entrypoints",
-    "vllm_mindspore/core",
     "vllm_mindspore/inputs",
-    "vllm_mindspore/logging_utils",
     "vllm_mindspore/multimodal",
     "vllm_mindspore/platforms",
-    "vllm_mindspore/transformers_utils",
-    "vllm_mindspore/triton_utils",
-    "vllm_mindspore/usage",
 ]
 # TODO(woosuk): Include the code from Megatron and HuggingFace.
 exclude = [
