@@ -16,16 +16,21 @@
 
 # isort:skip_file
 """test vllm qwen3 moe."""
+import pytest
+from unittest.mock import patch
+
 import os
 
-from tests.st.python import utils
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -38,16 +43,14 @@ env_vars = {
     "ATB_LLM_LCOC_ENABLE": "0",
     "VLLM_USE_V1": "1",
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore
-from vllm import LLM, SamplingParams
 
 
 def run_vllm_qwen3_30b_a3b(enforce_eager=False):
     """
     test case qwen3-30B-A3B
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [
@@ -80,10 +83,8 @@ def run_vllm_qwen3_30b_a3b(enforce_eager=False):
         assert generated_text == except_list[
             i], f"Expected: {except_list[i]}, but got: {generated_text}"
 
-    # unset env
-    env_manager.unset_all()
 
-
+@patch.dict(os.environ, env_vars)
 def test_vllm_qwen3_30b_a3b():
     """
     test case qwen3-30B-A3B
@@ -92,6 +93,7 @@ def test_vllm_qwen3_30b_a3b():
     run_vllm_qwen3_30b_a3b()
 
 
+@patch.dict(os.environ, env_vars)
 def test_vllm_qwen3_30b_a3b_eager():
     """
     test case qwen3-30B-A3B eager mode

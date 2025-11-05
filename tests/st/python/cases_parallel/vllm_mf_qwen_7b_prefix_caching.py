@@ -14,16 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """test mf qwen prefix caching."""
+import pytest
+from unittest.mock import patch
 
 import os
-from tests.st.python import utils
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "VLLM_MS_MODEL_BACKEND": "MindFormers",
@@ -35,15 +39,15 @@ env_vars = {
     "ATB_LLM_LCOC_ENABLE": "0",
     "VLLM_USE_V1": "0"
 }
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore  # noqa: F401, E402
-from vllm import LLM, SamplingParams  # noqa: E402
 
 
+@patch.dict(os.environ, env_vars)
 def test_mf_qwen_7b_prefix_caching():
     """
     test case qwen_7b_prefix_caching
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
 
     # First prompts.
     prompts = [
@@ -83,5 +87,3 @@ def test_mf_qwen_7b_prefix_caching():
         print(f"Output2 - Prompt: {second_prompts[i]!r}, "
               f"Generated text: {second_generated_text!r}")
         assert second_generated_text == second_except_list[i]
-
-    env_manager.unset_all()

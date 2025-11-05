@@ -16,16 +16,21 @@
 
 # isort:skip_file
 """test vllm qwen3."""
+import pytest
+from unittest.mock import patch
+
 import os
 
-from tests.st.python import utils
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -38,16 +43,13 @@ env_vars = {
     "ATB_LLM_LCOC_ENABLE": "0",
     "VLLM_USE_V1": "1",
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore
-from vllm import LLM, SamplingParams
 
 
 def run_vllm_qwen3_8b(enforce_eager=False):
     """
     run case qwen3 8B
     """
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [
@@ -78,14 +80,14 @@ def run_vllm_qwen3_8b(enforce_eager=False):
         assert generated_text == except_list[
             i], f"Expected: {except_list[i]}, but got: {generated_text}"
 
-    # unset env
-    env_manager.unset_all()
 
-
+@patch.dict(os.environ, env_vars)
 def test_vllm_qwen3_0_6b():
     """
     test case qwen3 0.6B
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [
@@ -115,19 +117,20 @@ def test_vllm_qwen3_0_6b():
         assert generated_text == except_list[
             i], f"Expected: {except_list[i]}, but got: {generated_text}"
 
-    # unset env
-    env_manager.unset_all()
 
-
+@patch.dict(os.environ, env_vars)
 def test_vllm_qwen3_8b():
     """
     test case qwen3 8B
     """
+    import vllm_mindspore
     run_vllm_qwen3_8b()
 
 
+@patch.dict(os.environ, env_vars)
 def test_qwen3_enforce_eager():
     """
     Test qwen3 8B using ENFORCE_EAGER.
     """
+    import vllm_mindspore
     run_vllm_qwen3_8b(enforce_eager=True)

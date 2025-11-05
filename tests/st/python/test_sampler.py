@@ -41,7 +41,7 @@ from vllm.utils import Counter, is_pin_memory_available
 from vllm.sequence import SamplingParams
 from vllm_mindspore.sequence import SequenceData, SequenceGroupMetadata
 
-from .utils import cleanup_subprocesses
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
 
 
 def teardown_function():

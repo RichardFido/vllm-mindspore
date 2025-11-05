@@ -20,7 +20,8 @@ from multiprocessing.pool import Pool
 
 import pytest
 
-from .utils import cleanup_subprocesses, tasks_resource_alloc
+from tests.st.python.utils.cases_parallel import (cleanup_subprocesses,
+                                                  tasks_resource_alloc)
 
 
 def teardown_function():

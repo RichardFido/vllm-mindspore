@@ -33,7 +33,7 @@ from vllm.utils import make_tensor_with_pad
 from vllm.v1.sample.metadata import SamplingMetadata
 from vllm.v1.sample.sampler import Sampler
 
-from .utils import cleanup_subprocesses
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
 
 
 def teardown_function():

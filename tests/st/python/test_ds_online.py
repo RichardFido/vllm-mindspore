@@ -16,18 +16,20 @@
 
 # isort:skip_file
 """test vllm deepseek online server."""
+import pytest
+from unittest.mock import patch
 import os
 import json
-import pytest
 import requests
 import subprocess
 import shlex
 import signal
 import time
 
-from . import utils
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 env_vars = {
     "vLLM_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
@@ -42,19 +44,13 @@ env_vars = {
     "LCAL_COMM_ID": "127.0.0.1:10068"
 }
 
-env_manager.setup_ai_environment(env_vars)
-
-import vllm_mindspore  # noqa: F401, E402
-from vllm.utils import get_open_port  # noqa: E402
-from vllm.logger import init_logger
-
-logger = init_logger(__name__)
-
 DS_R1_W8A8_MODEL = "/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8"
 
 
 def execute_shell_command(command):
     """执行 shell 命令并返回状态和输出"""
+    from vllm.logger import init_logger
+    logger = init_logger(__name__)
     status, output = subprocess.getstatusoutput(command)
     if status != 0:
         logger.info("执行命令失败: %s\n错误信息: %s", command, output)
@@ -63,6 +59,8 @@ def execute_shell_command(command):
 
 def stop_vllm_server(process=None):
     """停止 vLLM 服务及其相关进程"""
+    from vllm.logger import init_logger
+    logger = init_logger(__name__)
     if process is not None:
         try:
             os.killpg(process.pid, signal.SIGTERM)
@@ -112,6 +110,8 @@ def start_vllm_server(model, log_name, extra_params=''):
     Returns:
         process: 拉起服务的进程号
     """
+    from vllm.logger import init_logger
+    logger = init_logger(__name__)
     dirname, _ = os.path.split(os.path.abspath(__file__))
     log_path = os.path.join(dirname, log_name)
     start_cmd = f"vllm-mindspore serve {model}"
@@ -151,6 +151,8 @@ def start_vllm_server(model, log_name, extra_params=''):
 
 
 def set_request(model_path, master_ip="127.0.0.1", port="8000"):
+    from vllm.logger import init_logger
+    logger = init_logger(__name__)
     url = f"http://{master_ip}:{port}/v1/completions"
     headers = {"Content-Type": "application/json"}
     data = {
@@ -190,10 +192,14 @@ def set_request(model_path, master_ip="127.0.0.1", port="8000"):
     assert generate_text == expect_result
 
 
+@patch.dict(os.environ, env_vars)
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
 def test_deepseek_r1_dp4_tp2_ep4_online():
+    import vllm_mindspore
+    from vllm.utils import get_open_port  # noqa: E402
+
     log_name = "test_deepseek_r1_dp4_tp2_ep4_online.log"
     log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             log_name)
@@ -227,6 +233,3 @@ def test_deepseek_r1_dp4_tp2_ep4_online():
     stop_vllm_server(process)
     if os.path.exists(log_path):
         os.remove(log_path)
-
-    # unset env
-    env_manager.unset_all()
