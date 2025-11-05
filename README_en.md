@@ -74,7 +74,7 @@ bash build_image.sh -a device_type
 
 ## Contributing
 
-Please read [CONTRIBUTING](https://www.mindspore.cn/vllm_mindspore/docs/en/master/developer_guide/contributing.html) for details on setting up development environments, testing functions, and submitting PR.
+Please read [CONTRIBUTING](https://gitee.com/mindspore/vllm-mindspore/blob/master/CONTRIBUTING.md) for details on setting up development environments, testing functions, and submitting PR.
 
 We welcome and value any form of contribution and cooperation. Please use [Issue](https://gitee.com/mindspore/vllm-mindspore/issues) to inform us of any bugs you encounter, or to submit your feature requests, improvement suggestions, and technical solutions.
 
