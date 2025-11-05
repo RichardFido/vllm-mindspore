@@ -6,48 +6,63 @@ labels: ["RFC"]
 body:
 - type: textarea
   attributes:
-    label: 背景与目标描述.
-    description: >
-      The motivation of the RFC.
+    label: 背景与目标描述｜Background and goal description
+    description: |
+      该 RFC 的动机与目标。<br>
+      The motivation and goals of the RFC.
   validations:
     required: true
 - type: textarea
   attributes:
-    label: 建议的方案.
-    description: >
-      The proposed change of the RFC.
+    label: 建议的方案｜Proposed solution
+    description: |
+      针对该 RFC 的拟议变更与方案，如果是大颗粒特性或架构重构，请提交设计文档到[Design Documents](https://gitee.com/mindspore/vllm-mindspore/wikis)目录下。<br>
+      The proposed changes/solution of the RFC. If this is a large feature or an architectural refactor, please submit a design document under the [Design Documents](https://gitee.com/mindspore/vllm-mindspore/wikis) directory.
+    placeholder: |-
+      示例｜Example:
+      - [ ] 预期规格：包括但不限于精度、性能、适用的硬件规格等
+            Expected specs: including but not limited to accuracy, performance, applicable hardware, etc.
+      - [ ] 设计思路：当前方案的考量，是否有不同方案的对比等
+            Design ideas: considerations of the current approach, comparisons with alternatives, etc.
+      - [ ] 特性约束：特性使用所需的环境变量等约束，是否与其他特性兼容或冲突等
+            Feature constraints: required env vars and other constraints, compatibility/conflicts with other features, etc.
   validations:
     required: true
 - type: textarea
   attributes:
-    label: 涉及到的对外API
-    description: >
-      描述该特性是否会有对外API的增加与变更情况的发生，以及变更可能会造成的周边影响.
+    label: 涉及到的对外API｜External API changes involved
+    description: |
+      描述该方案是否会增加或变更对外 API，以及变更可能带来的周边影响。<br>
+      Describe whether this RFC adds/changes public APIs and the potential ripple effects.
 - type: textarea
   attributes:
-    label: 测试验证
-    description: >
-      详细描述针对该方案，如何开展测试验证，以保证该特性的合入后对应的能力得到充分验证，包括到不限于功能、性能、可靠性、安全等.
+    label: 测试验证｜Test validation
+    description: |
+      详细描述如何开展测试验证，以确保方案能力得到充分验证，包括但不限于功能、性能、可靠性、安全等。<br>
+      Describe in detail how to validate the proposal to ensure sufficient coverage, including but not limited to functionality, performance, reliability, and security.
   validations:
     required: true
 - type: textarea
   attributes:
-    label: 期望的反馈时间.
-    description: >
-      The feedback period of the RFC. Usually at least one week.
+    label: 期望的反馈时间｜Expected feedback period
+    description: |
+      该 RFC 期望的反馈周期（通常至少一周）。<br>
+      The feedback period of the RFC (usually at least one week).
   validations:
     required: false
 - type: textarea
   attributes:
-    label: CC List.
-    description: >
+    label: CC 列表｜CC List
+    description: |
+      你希望抄送的人员列表。<br>
       The list of people you want to CC.
   validations:
     required: false
 - type: textarea
   attributes:
-    label: 其他补充信息.
-    description: >
+    label: 其他补充信息｜Other information
+    description: |
+      你希望补充的其他信息。<br>
       Any other things you would like to mention.
   validations:
     required: false
@@ -57,7 +72,7 @@ body:
       Thanks for contributing 🎉! The mindspore core team hosts a biweekly RFC review session, while most RFCs can be discussed online, you can optionally sign up for a slot to discuss your RFC online.
 - type: checkboxes
   attributes:
-    label: Before submitting a new issue...
+    label: 在提交新议题前…｜Before submitting a new issue...
     options:
-      - label: Make sure you already searched for previous [RFCs](https://gitee.com/mindspore/vllm-mindspore/issues).
+      - label: 请先搜索是否已有相关 [RFCs](https://gitee.com/mindspore/vllm-mindspore/issues)｜Make sure you already searched for previous [RFCs](https://gitee.com/mindspore/vllm-mindspore/issues).
         required: true
