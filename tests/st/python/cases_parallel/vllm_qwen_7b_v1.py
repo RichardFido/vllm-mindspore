@@ -14,16 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """test vllm qwen."""
+import pytest
+from unittest.mock import patch
 
 import os
-from tests.st.python import utils
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -37,16 +41,13 @@ env_vars = {
     "ATB_LLM_LCOC_ENABLE": "0",
     "VLLM_USE_V1": "1"
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore  # noqa: F401, E402
-from vllm import LLM, SamplingParams  # noqa: E402
 
 
 def run_vllm_qwen(enforce_eager=False):
     """
     run qwen2.5 7B
     """
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [
@@ -74,19 +75,20 @@ def run_vllm_qwen(enforce_eager=False):
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
         assert generated_text == except_list[i]
 
-    # unset env
-    env_manager.unset_all()
 
-
+@patch.dict(os.environ, env_vars)
 def test_vllm_qwen():
     """
     test case qwen2.5 7B
     """
+    import vllm_mindspore
     run_vllm_qwen()
 
 
+@patch.dict(os.environ, env_vars)
 def test_qwen_enforce_eager():
     """
     Test qwen2.5 7B using ENFORCE_EAGER.
     """
+    import vllm_mindspore
     run_vllm_qwen(enforce_eager=True)
