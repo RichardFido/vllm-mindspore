@@ -16,16 +16,281 @@
 """test cases parallel"""
 
 import os
-from multiprocessing.pool import Pool
-
+import json
 import pytest
+import importlib
 
-from tests.st.python.utils.cases_parallel import (cleanup_subprocesses,
-                                                  tasks_resource_alloc)
+from multiprocessing.pool import Pool
+from .utils.common_utils import logger
+from tests.st.python.utils.common_utils import (teardown_function,
+                                                setup_function)
+
+level_marks = ("level0", "level1", "level2", "level3", "level4")
+
+card_marks = ("env_onecard", "allcards", "env_single")
+
+platform_marks = ("platform_arm_ascend910b_training", "platform_ascend310p")
+
+PLATFORM_MAP = {
+    '910B': "platform_arm_ascend910b_training",
+    '310P': "platform_ascend310p"
+}
+
+HAS_TESTS_REGISTERED = False
+
+registered_910b_tests = []
+registered_310p_tests = []
 
 
-def teardown_function():
-    cleanup_subprocesses()
+def register_tests_by_platform(register_cases, register_list):
+    """
+    Register function for specific platform
+    """
+    for test_case in register_cases:
+        """
+        card_num: number of occupied cards.
+        test_node_id: string in {test_file_path}::{test_function_name} format.
+        """
+        card_num = test_case.get("card_num")
+        test_node_id = test_case.get("test_node_id")
+        if card_num is not None and test_node_id is not None:
+            register_list.append((card_num, test_node_id))
+        else:
+            logger.warning("Invalid test case entry: %s", test_case)
+
+
+def load_registered_tests_from_json(json_file):
+    """
+    Register the tests to registered_910b_tests and registered_310p_tests.
+    """
+    current_file_path = os.path.abspath(__file__)
+    current_dir = os.path.dirname(current_file_path)
+    register_json_path = os.path.join(current_dir, json_file)
+    with open(register_json_path) as f:
+        tests_cases = json.load(f)
+
+    register_tests_by_platform(tests_cases.get("registered_910b_tests"),
+                               register_list=registered_910b_tests)
+    register_tests_by_platform(tests_cases.get("registered_310p_tests"),
+                               register_list=registered_310p_tests)
+
+
+def tasks_resource_alloc(tasks: list[tuple[int]]) -> list[tuple[str]]:
+    """
+    Allocate devices, lccl base port, hccl base port to tasks
+    according to device requirement of each task.
+
+    For example:
+        [(2, "cases_parallel/vllm_task.py::test_1", "test_1.log")]
+        ==> [("export ASCEND_RT_VISIBLE_DEVICES=0,1 &&
+               export LCAL_COMM_ID=127.0.0.1:10068 && "
+              "export HCCL_IF_BASE_PORT=61000 && "
+              "pytest -s -v cases_parallel/vllm_task.py::test_1 > test_1.log",
+              "test_1.log")]
+
+    Args:
+        tasks (list[tuple[int]]): list of tasks. Each task contain 3 elements.
+            1. device_req (int): Num of device requirements,
+                                 which will occur device_req devices,
+                                 device_req ports for lccl,
+                                 device_req ports for hccl.
+            2. case_desc (str): The case description,
+               such as "path_to_case/case.py::target_case".
+            3. log_file (str): The logging file path.
+
+    Returns:
+        list[tuple[str]]: Append resource environment to the task commands.
+    """
+    device_limit = 8
+    device_base = 0
+    lccl_base_port = 20068
+    hccl_base_port = 51000
+
+    out_tasks: list[tuple[str]] = []
+    for task in tasks:
+        assert len(task) == 3
+        resource_req, task_case, log_file = task
+        if not isinstance(resource_req, int):
+            raise TypeError(
+                "First argument of task should be a int or str, but got %s!",
+                str(type(resource_req)))
+
+        device_str = ",".join(
+            [str(d) for d in range(device_base, device_base + resource_req)])
+        lccl_str = f"127.0.0.1:{lccl_base_port}"
+
+        commands = [
+            f"export ASCEND_RT_VISIBLE_DEVICES={device_str}",
+            f"export LCAL_COMM_ID={lccl_str}",
+            f"export HCCL_IF_BASE_PORT={hccl_base_port}"
+        ]
+
+        device_base += resource_req
+        lccl_base_port += resource_req
+        hccl_base_port += resource_req
+
+        commands.append(f"pytest -s -v {task_case} > {log_file}")
+        out_tasks.append((" && ".join(commands), log_file))
+
+    if device_base > device_limit:
+        raise ValueError(
+            "Total require device %d exceeding resource limits %d !",
+            device_base, device_limit)
+
+    return out_tasks
+
+
+def generate_group_contents(tests_info, capacity=8):
+    """
+    Group and combine the registered tests according to the given rule,
+    which prioritizes those occupied more cards. Strive to maximize the
+    utilization of device capacity.
+    Args:
+        tests_info (list): Each element in the list includes `card_num` and
+            `test_node_id`
+        capacity (int): The capacity of cards in the execution device,
+            default 8
+    Returns:
+        list[list]: Tests groups divided by sorting strategy and device
+            capacity, each group containing information about `card_num`
+            and `test_node_id`involved
+    """
+    # Sort by the number of occupied devices in descending order.
+    tests_info_sorted = sorted(tests_info, key=lambda x: x[0], reverse=True)
+    groups = []  # The total number of cards occupied by each group.
+    group_contents = []  # Store test information for each group.
+
+    for info in tests_info_sorted:
+        num = info[0]
+        # Check if there are any existing groups that can accommodate the
+        # current number.
+        found = False
+        for i in range(len(groups)):
+            if groups[i] + num <= capacity:
+                groups[i] += num
+                group_contents[i].append(info)
+                found = True
+                break
+        # If no feasible group is found, create a new group.
+        if not found:
+            groups.append(num)
+            group_contents.append([info])
+
+    return group_contents
+
+
+def get_module_pytest_marks(module_path, function_name):
+    """Obtain the pytestmark of the test module."""
+    current_file_path = os.path.abspath(__file__)
+    current_dir = os.path.dirname(current_file_path)
+    module_file_path = os.path.join(current_dir, *module_path.split('/'))
+    if not os.path.exists(module_file_path):
+        raise ImportError("module file %s does not exist.", module_file_path)
+
+    spec = importlib.util.spec_from_file_location(module_path,
+                                                  module_file_path)
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as e:
+        raise ImportError("Loading module %s failed: %s", module_path,
+                          str(e)) from e
+
+    func = getattr(module, function_name, None)
+    if func is None:
+        raise AttributeError("Function %s not found in module %s.",
+                             function_name, module_path)
+
+    if hasattr(func, 'pytestmark'):
+        return [mark.name for mark in func.pytestmark]
+    else:
+        return []
+
+
+def collection_cases_by_level(test_register):
+    '''
+    According to the level of registered tests, divide them into
+    corresponding maps.
+    '''
+    tests_info = {
+        f"{level_marks[0]}": [],
+        f"{level_marks[1]}": [],
+        f"{level_marks[2]}": [],
+        f"{level_marks[3]}": [],
+        f"{level_marks[4]}": []
+    }
+
+    for case in test_register:
+        module_path, test_function_name = case[1].split("::")
+        marks = get_module_pytest_marks(module_path, test_function_name)
+        level_mark = [mark for mark in marks if mark in level_marks]
+        card_mark = [mark for mark in marks if mark in card_marks]
+
+        if len(card_mark) > 0:
+            raise ValueError(
+                "If the case has specified 'env_single', 'env_onecard' "
+                "or 'allcards', there is no need to register and execute "
+                "concurrently")
+        elif len(level_mark) > 1:
+            raise ValueError(
+                "Each test case can only specify a unique level, "
+                "but %s got %s.", case[1], str(len(level_mark)))
+        elif len(level_mark) == 1:
+            tests_info[level_mark[0]].append(case)
+        else:
+            raise ValueError(
+                "Case '%s' lacks necessary level mark, "
+                "please specify", case[1])
+    return tests_info
+
+
+def generate_parallel_cases(test_register, platform):
+    """
+    Generate composite concurrent tests content for all registered tests.
+    Args:
+        test_register (list): Registration List, option from
+            `registered_910b_tests` and `registered_310p_tests`
+        platform (str): Corresponding platform, option from `910B` and `310P`
+    """
+    tests_info = collection_cases_by_level(test_register)
+
+    for level in level_marks:
+        generate_cases_with_level(tests_info[level], platform, level=level)
+
+
+def generate_cases_with_level(tests_info, platform, level="level0"):
+    """
+    Generate composite concurrent tests content based on the specified
+    test level.
+    Args:
+        tests_info (list): Tests information at the corresponding level
+        platform (str): Corresponding platform, option from `910B` and `310P`
+        level (str): Tests level, supporting levels 0 to 4
+    """
+    if len(tests_info) == 0:
+        return
+
+    group_contents = generate_group_contents(tests_info, capacity=8)
+
+    for i, per_group in enumerate(group_contents):
+        print(f"iter: {i}. per_group: {per_group}\n")
+        test_content = ""
+        test_content += (
+            f"@pytest.mark.{level}\n"
+            f"@pytest.mark.{PLATFORM_MAP[platform]}\n"
+            f"@pytest.mark.env_single\n"
+            f"def test_cases_parallel_{platform}_{level}_part{i}():\n"
+            f"    cases = [\n")
+
+        for case in per_group:
+            node_id = case[1]
+            log_name = node_id.split('/')[-1].replace(".py::", '_') + '.log'
+            test_content += f"        ({case[0]}, '{node_id}', '{log_name}'),\n"
+
+        test_content += ("    ]\n"
+                         "    run_tasks(cases)\n\n\n")
+
+        exec(test_content, globals())
 
 
 def run_command(command_info):
@@ -51,247 +316,18 @@ def run_tasks(cases):
     check_results(commands, results)
 
 
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_part0():
+def load_and_generate_tests():
     """
-    Feature: test cases parallel.
-    Description: test cases parallel.
-    Expectation: Pass.
+    Load and generate tests form register_parallel_tests.json
     """
-    cases = [
-        (2, "cases_parallel/vllm_mf_qwen_7b.py::test_mf_qwen",
-         "vllm_mf_qwen_7b_test_mf_qwen.log"),
-        (2, "cases_parallel/vllm_mf_qwen_7b_chunk_prefill.py"
-         "::test_mf_qwen_7b_chunk_prefill",
-         "vllm_mf_qwen_7b_chunk_prefill_test_mf_qwen_7b_chunk_prefill.log"),
-        (2, "cases_parallel/vllm_mf_qwen_7b_chunk_prefill_v1.py"
-         "::test_mf_qwen_7b_chunk_prefill",
-         "vllm_mf_qwen_7b_chunk_prefill_v1_test_mf_qwen_7b_chunk_prefill.log"),
-        (2, "cases_parallel/vllm_sampling.py::test_vllm_sampling_n_logprobs",
-         "vllm_sampling_n_logprobs_v1.log")
-    ]
-    run_tasks(cases)
+    global HAS_TESTS_REGISTERED
+    if not HAS_TESTS_REGISTERED:
+        load_registered_tests_from_json("register_parallel_tests.json")
+
+        # Dynamically generate test cases
+        generate_parallel_cases(registered_910b_tests, platform="910B")
+        generate_parallel_cases(registered_310p_tests, platform="310P")
+        HAS_TESTS_REGISTERED = True
 
 
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_part1():
-    """
-    Feature: test cases parallel.
-    Description: test cases parallel.
-    Expectation: Pass.
-    """
-    cases = [
-        (2, "cases_parallel/vllm_mf_qwen_7b_mss.py::test_mf_qwen_7b_mss",
-         "vllm_mf_qwen_7b_mss_test_mf_qwen_7b_mss.log"),
-        (2, "cases_parallel/vllm_mf_qwen_7b_prefix_caching.py"
-         "::test_mf_qwen_7b_prefix_caching",
-         "vllm_mf_qwen_7b_prefix_caching_test_mf_qwen_7b_prefix_caching.log"),
-        (2, "cases_parallel/vllm_mf_qwen_7b_prefix_caching_v1.py"
-         "::test_mf_qwen_7b_prefix_caching",
-         "vllm_mf_qwen_7b_prefix_caching_v1_test_mf_qwen_7b_prefix_caching.log"
-         ),
-        (2, "cases_parallel/vllm_mf_qwen_7b_v1.py::test_mf_qwen",
-         "vllm_mf_qwen_7b_v1_test_mf_qwen.log")
-    ]
-    run_tasks(cases)
-
-
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_part2():
-    """
-    Feature: test cases parallel.
-    Description: test cases parallel.
-    Expectation: Pass.
-    """
-    cases = [(2, "cases_parallel/vllm_qwen_7b.py::test_vllm_qwen",
-              "vllm_qwen_7b_test_vllm_qwen.log"),
-             (2, "cases_parallel/vllm_qwen_7b_v1.py::test_vllm_qwen",
-              "vllm_qwen_7b_v1_test_vllm_qwen.log"),
-             (4, "cases_parallel/shm_broadcast.py::test_shm_broadcast",
-              "shm_broadcast_test_shm_broadcast.log")]
-    run_tasks(cases)
-
-
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_part3():
-    """
-    Feature: test cases parallel.
-    Description: test cases parallel.
-    Expectation: Pass.
-    """
-    cases = [
-        (2, "cases_parallel/vllm_deepseek_bf16_part.py::test_deepseek_r1_bf16",
-         "vllm_deepseek_bf16_part_test_deepseek_r1_bf16.log"),
-        (2,
-         "cases_parallel/vllm_deepseek_bf16_part_v1.py::test_deepseek_r1_bf16",
-         "vllm_deepseek_bf16_part_v1_test_deepseek_r1_bf16.log"),
-        (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_r1",
-         "vllm_deepseek_part_test_deepseek_r1.log"),
-        (2, "cases_parallel/vllm_deepseek_part_v1.py::test_deepseek_r1",
-         "vllm_deepseek_part_v1_test_deepseek_r1.log"),
-    ]
-    run_tasks(cases)
-
-
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_part4():
-    """
-    Feature: test cases parallel.
-    Description: test cases parallel.
-    Expectation: Pass.
-    """
-    cases = [
-        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v0",
-         "vllm_mf_qwen3_8b_test_mf_qwen3.log"),
-        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1",
-         "vllm_mf_qwen3_8b_v1_test_mf_qwen3.log"),
-        (1, "cases_parallel/vllm_mf_telechat2_7b.py::test_mf_telechat2_7b",
-         "vllm_mf_telechat2_7b_test_mf_telechat2_7b.log"),
-        (1, "cases_parallel/vllm_qwen3.py::test_vllm_qwen3_8b",
-         "vllm_qwen3_test_vllm_qwen3_8b.log"),
-        (1, "cases_parallel/vllm_qwen3.py::test_vllm_qwen3_0_6b",
-         "vllm_qwen3_test_vllm_qwen3_0_6b.log"),
-        (1, "cases_parallel/vllm_llama3.py::test_vllm_llama3_8b",
-         "vllm_llama3_8b_test_vllm_llama3.log")
-    ]
-    run_tasks(cases)
-
-
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_part5():
-    """
-    Feature: test cases parallel.
-    Description: test cases parallel.
-    Expectation: Pass.
-    """
-    cases = [
-        (2, "cases_parallel/multilora_inference.py::test_multilora_inference",
-         "multilora_inference_test_multilora_inference.log"),
-        (2, "cases_parallel/vllm_qwen_7b_v1.py::test_qwen_enforce_eager",
-         "vllm_qwen_7b_v1_test_qwen_enforce_eager.log"),
-        (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_mtp",
-         "vllm_deepseek_part_test_deepseek_mtp.log"),
-        (1, "cases_parallel/vllm_qwen3.py::test_qwen3_enforce_eager",
-         "vllm_qwen3_test_qwen3_enforce_eager.log"),
-    ]
-    run_tasks(cases)
-
-
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_part6():
-    """
-    Feature: test cases parallel.
-    Description: test cases parallel.
-    Expectation: Pass.
-    """
-    cases = [
-        (2, "cases_parallel/vllm_qwen3_moe.py::test_vllm_qwen3_30b_a3b",
-         "test_vllm_qwen3_30b_a3b.log"),
-        (2, "cases_parallel/vllm_qwen3_moe.py::test_vllm_qwen3_30b_a3b_eager",
-         "test_vllm_qwen3_30b_a3b_eager.log"),
-    ]
-    run_tasks(cases)
-
-
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_part7():
-    """
-    Feature: test cases parallel.
-    Description: test cases parallel.
-    Expectation: Pass.
-    """
-    cases = [
-        (2, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py::test_qwen2_5_vl_7b_v1",
-         "vllm_qwen2_5_vl_7b_v1.log"),
-        (1, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py"
-         "::test_qwen2_5_vl_7b_v1_enforce_eager",
-         "vllm_qwen2_5_vl_7b_v1_enforce_eager.log"),
-        (1, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py"
-         "::test_qwen2_5_vl_7b_v1_video_infer",
-         "vllm_qwen2_5_vl_7b_v1_video_infer.log"),
-    ]
-    run_tasks(cases)
-
-
-@pytest.mark.level4
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_level4_part0():
-    """
-    Feature: test cases parallel.
-    Description:
-        vllm_mf_qwen_7b_cp_pc_mss.py::test_mf_qwen_7b_cp_pc_mss:
-            accuracy error happens occasionally
-    Expectation: Pass.
-    """
-    cases = [(2, "cases_parallel/vllm_mf_qwen_7b_cp_pc_mss.py"
-              "::test_mf_qwen_7b_cp_pc_mss",
-              "vllm_mf_qwen_7b_cp_pc_mss_test_mf_qwen_7b_cp_pc_mss.log")]
-    run_tasks(cases)
-
-
-@pytest.mark.level4
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_level4_mcore1():
-    """
-    Mcore currently does not support the following test cases,
-    adjust the level to level 4 until it is re supported
-    """
-    cases = [
-        (2, "cases_parallel/vllm_deepseek_osl.py::test_deepseek_r1",
-         "vllm_deepseek_osl_test_deepseek_r1.log"),
-        (2, "cases_parallel/vllm_deepseek_smoothquant.py::test_deepseek_r1",
-         "vllm_deepseek_smoothquant_test_deepseek_r1.log"),
-        (2, "cases_parallel/vllm_deepseek_smoothquant_mss.py"
-         "::test_deepseek_r1_mss",
-         "vllm_deepseek_smoothquant_mss_test_deepseek_r1_mss.log")
-    ]
-    run_tasks(cases)
-
-
-@pytest.mark.level4
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_level4_mcore2():
-    """
-    Mcore currently does not support the following test cases,
-    adjust the level to level 4 until it is re supported
-    """
-    cases = [
-        (2, "cases_parallel/vllm_deepseek_a8w4.py::test_deepseek_r1_a8w4",
-         "vllm_deepseek_a8w4_test_deepseek_r1_a8w4.log"),
-    ]
-    run_tasks(cases)
-
-
-@pytest.mark.level0
-@pytest.mark.platform_ascend310p
-@pytest.mark.env_single
-def test_cases_parallel_310p_part0():
-    """
-    Feature: test cases parallel in 310p.
-    Description: test cases parallel.
-    Expectation: Pass.
-    """
-    cases = [
-        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1_310p",
-         "vllm_mf_qwen3_8b_v1_310p_test_mf_qwen3.log"),
-    ]
-    run_tasks(cases)
+load_and_generate_tests()

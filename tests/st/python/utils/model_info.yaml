@@ -1,0 +1,58 @@
+# All registered model weights can be obtained on
+# https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/
+# And it will be mapped to /home/workspace/mindspore_dataset/weight/ in the CI environment
+
+Llama-3.1-8B-Instruct:
+  description: "Llama-3.1-8B, HF default configuration, source from https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Llama-3.1-8B-Instruct"
+
+telechat2_7b:
+  description: "TeleChat2 7B, HF default configuration, source from https://huggingface.co/Tele-AI/TeleChat2-7B, and then convert the bin format to safetensors"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/telechat2_7b"
+
+Qwen2.5-7B-Instruct:
+  description: "Qwen2.5-7B, HF default configuration, source from https://huggingface.co/Qwen/Qwen2.5-7B-Instruct"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct"
+
+Qwen2.5-7B-Lora-Law:
+  description: "Qwen2.5-7B-Lora-Law, HF default configuration, source from https://huggingface.co/qingpingwan/Qwen2.5-7B-Lora-Law"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen2.5-7B-Lora-Law"
+
+Qwen2.5-VL-7B-Instruct:
+  description: "Qwen2.5-VL-7B-Instruct, HF default configuration, source from https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen2.5-VL-7B-Instruct"
+
+Qwen3-0.6B:
+  description: "Qwen3-0.6B, HF default configuration, source from https://huggingface.co/Qwen/Qwen3-0.6B"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-0.6B"
+
+Qwen3-8B:
+  description: "Qwen3-8B, HF default configuration, source from https://huggingface.co/Qwen/Qwen3-8B"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-8B"
+
+Qwen3-30B-A3B:
+  description: "Qwen3-30B-A3B, HF default configuration, source from https://huggingface.co/Qwen/Qwen3-30B-A3B"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-30B-A3B"
+
+DeepSeek-R1-bf16:
+  description: "DeepSeek-R1-bf16, HF default configuration"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/DeepSeek-R1-bf16"
+
+DeepSeek-R1-W8A8:
+  description: "DeepSeek-R1-W8A8, modify the 'num_hidden_layers' to 4 based on the default quantilization configuration"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8"
+
+DeepSeek-R1-MTP:
+  description: "DeepSeek-R1 with MTP, Perform the following modifications based on default quantilization configuration:
+                1. Modify the 'num_hidden_layers' to 4
+                2. Delete the content after layer.4 in quantit_modelw_eight_w8a8d_dynamic.index.json, and change the layer.61 corresponding to mtp in model.safesensors.index.json to layer.4
+                3. Delete the content of layer 0-60 in model.safesensors.index.json"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/DeepSeek-R1-MTP"
+
+DeepSeek-R1-W8A8-osl:
+  description: "DeepSeek-R1 with osl quantilization"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8-osl"
+
+DeepSeek-R1-W8A8-smoothquant-newconfig:
+  description: "DeepSeek-R1 with smoothquant new config"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8-smoothquant-newconfig"
