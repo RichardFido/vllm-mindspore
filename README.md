@@ -74,7 +74,7 @@ bash build_image.sh -a device_type
 
 ## 贡献
 
-请参考 [CONTRIBUTING](https://www.mindspore.cn/vllm_mindspore/docs/zh-CN/master/developer_guide/contributing.html) 文档了解更多关于开发环境搭建、功能测试以及 PR 提交规范的信息。
+请参考 [CONTRIBUTING](https://gitee.com/mindspore/vllm-mindspore/blob/master/CONTRIBUTING_CN.md) 文档了解更多关于开发环境搭建、功能测试以及 PR 提交规范的信息。
 
 我们欢迎并重视任何形式的贡献与合作，请通过[Issue](https://gitee.com/mindspore/vllm-mindspore/issues)来告知我们您遇到的任何Bug，或提交您的特性需求、改进建议、技术方案。
 
