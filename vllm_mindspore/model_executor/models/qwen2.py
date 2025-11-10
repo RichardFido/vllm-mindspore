@@ -398,6 +398,8 @@ class Qwen2Model(nn.Cell):
                 name = name.replace(weight_name, param_name)
                 if name in params_dict:
                     param = params_dict[name]
+                    if not getattr(param, "weight_loader", None):
+                        continue
                     weight_loader = param.weight_loader
                     weight_loader(param, loaded_weight, shard_id)
                     loaded_params.add(name)
