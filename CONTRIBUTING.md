@@ -137,7 +137,7 @@ We recommend using the Fork-Pull Development Model for code submission. The deta
 
     - The code must comply with project specifications, with no syntax errors or logical flaws.
 
-    - Obtain "Approved" support from all maintainers of the relevant module(s) (some modules may have more than one maintainer / the PR may be involved multiple modules).
+    - Obtain "Pass review" support from all maintainers of the relevant module(s) (some modules may have more than one maintainer / the PR may be involved multiple modules).
   
     Note: For large-scale features, full communication and discussion are required in the SIG meeting before merging, and a feature design document must be provided.
 
