@@ -24,7 +24,7 @@ from typing import get_args
 
 import torch
 import vllm.envs as envs
-from vllm.config import (GuidedDecodingBackendV1, LoadFormat, ModelConfig,
+from vllm.config import (ModelConfig,
                          ParallelConfig, SchedulerConfig)
 from vllm.engine.arg_utils import (EngineArgs, _raise_or_fallback,
                                    _warn_or_fallback)
@@ -39,11 +39,6 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
 
     #############################################################
     # Unsupported Feature Flags on V1.
-
-    if self.load_format == LoadFormat.SHARDED_STATE.value:
-        _raise_or_fallback(feature_name=f"--load_format {self.load_format}",
-                           recommend_to_remove=False)
-        return False
 
     if (self.logits_processor_pattern != EngineArgs.logits_processor_pattern):
         _raise_or_fallback(feature_name="--logits-processor-pattern",
@@ -74,13 +69,6 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
     if self.scheduler_delay_factor != SchedulerConfig.delay_factor:
         _raise_or_fallback(feature_name="--scheduler-delay-factor",
                            recommend_to_remove=True)
-        return False
-
-    if self.guided_decoding_backend not in get_args(GuidedDecodingBackendV1):
-        _raise_or_fallback(
-            feature_name=
-            f"--guided-decoding-backend={self.guided_decoding_backend}",
-            recommend_to_remove=False)
         return False
 
     # Need at least Ampere for now (FA support required).

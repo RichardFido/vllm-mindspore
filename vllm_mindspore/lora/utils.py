@@ -15,7 +15,7 @@
 # limitations under the License.
 """Unified interface for LoRA layers in vllm-mindspore."""
 
-from vllm.lora.fully_sharded_layers import (
+from vllm.lora.layers import (
     ColumnParallelLinearWithShardedLoRA,
     MergedColumnParallelLinearWithShardedLoRA,
     MergedQKVParallelLinearWithShardedLoRA, QKVParallelLinearWithShardedLoRA,

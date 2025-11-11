@@ -27,7 +27,7 @@ from vllm.utils import cdiv
 from vllm.v1.kv_cache_interface import FullAttentionSpec
 
 
-@dataclass
+@dataclass(frozen=True)
 class MLAQuantFullAttentionSpec(FullAttentionSpec):
 
     fa3_quant: bool = False

@@ -49,7 +49,6 @@ else:
 from mindspore import Tensor, mint, nn
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.models.interfaces import SupportsPP
-from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.attention import Attention
@@ -523,8 +522,6 @@ class LlamaForCausalLM(NativeModel, SupportsPP):
     def compute_logits(
         self,
         hidden_states: Tensor,
-        sampling_metadata: SamplingMetadata,
     ) -> Optional[Tensor]:
-        logits = self.logits_processor(self.lm_head, hidden_states,
-                                       sampling_metadata)
+        logits = self.logits_processor(self.lm_head, hidden_states)
         return logits

@@ -27,11 +27,11 @@ from typing import (TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type,
 
 import mindspore as ms
 from mindspore._c_expression import swap_cache
+from vllm.v1.attention.backends.utils import AttentionMetadataBuilder
 from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
                                               AttentionLayer,
                                               AttentionMetadata,
-                                              AttentionMetadataBuilder,
-                                              AttentionState, AttentionType)
+                                              AttentionType)
 from vllm.attention.backends.utils import (compute_slot_mapping,
                                            compute_slot_mapping_start_idx,
                                            is_block_tables_empty)
@@ -551,10 +551,6 @@ class MsAttentionBackend(AttentionBackend):
         return MsAttentionMetadataBuilder
 
     @staticmethod
-    def get_state_cls() -> Type["AttentionState"]:
-        return MsAttentionState
-
-    @staticmethod
     def get_kv_cache_shape(
         num_blocks: int,
         block_size: int,
@@ -623,10 +619,6 @@ class MLABackend(AttentionBackend):
     @staticmethod
     def get_builder_cls() -> Type["MsAttentionMetadataBuilder"]:
         return MsAttentionMetadataBuilder
-
-    @staticmethod
-    def get_state_cls() -> Type["AttentionState"]:
-        return MsAttentionState
 
     @staticmethod
     def get_kv_cache_shape(

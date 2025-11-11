@@ -28,16 +28,17 @@ logger = init_logger(__name__)
 def compile_or_warm_up_model(self) -> None:
     # MindSpore does not support cuda graph. No need to warm up the model.
     # Since prefill is done previously, we do decode here.
-    default_max_num_reqs = 1  # For MindSpore, we only do one more decode here.
-
-    if hasattr(self.model_runner.model, 'has_chunked_warmup') \
-            and not self.model_runner.model.has_chunked_warmup:
-        logger.info("Warmup for chunked graph.")
-        self.model_runner._dummy_run(num_tokens=default_max_num_reqs)
-
+    max_num_reqs = 1
     # Only pp_last_rank has lm_head, which is required by _dummy_sampler_run.
-    if get_pp_group().is_last_rank:
-        self.model_runner._dummy_sampler_run(
-            self.model_runner._dummy_run(num_tokens=default_max_num_reqs))
+
+    # We skip EPLB here since we don't want to record dummy metrics
+    hidden_states, last_hidden_states = \
+        self.model_runner._dummy_run(
+            num_tokens=max_num_reqs,
+            skip_eplb=True,
+        )
+    if self.model_runner.is_pooling_model:
+        self.model_runner._dummy_pooler_run(hidden_states)
     else:
-        self.model_runner._dummy_run(num_tokens=default_max_num_reqs)
+        self.model_runner._dummy_sampler_run(
+            hidden_states=last_hidden_states)

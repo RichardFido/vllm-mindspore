@@ -29,7 +29,7 @@ from vllm.logger import init_logger
 from vllm.utils import get_ip
 from vllm.v1.engine.core import DPEngineCoreActor
 from vllm.v1.executor.abstract import Executor
-from vllm.v1.utils import CoreEngineActorManager, EngineZmqAddresses
+from vllm.v1.engine.utils import CoreEngineActorManager, EngineZmqAddresses
 
 logger = init_logger(__name__)
 

@@ -20,7 +20,7 @@
 
 from vllm.config import VllmConfig
 from vllm.v1.executor.abstract import Executor
-from vllm.v1.utils import EngineZmqAddresses
+from vllm.v1.engine.utils import EngineZmqAddresses
 
 from vllm_mindspore.config import stateless_destroy_socket_process_group
 

@@ -28,7 +28,7 @@ from vllm.attention.backends.abstract import AttentionType
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.distributed import get_dp_group, get_ep_group
 from vllm.forward_context import get_forward_context
-from vllm.model_executor.sampling_metadata import SamplingMetadata
+from vllm.v1.sample.metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
@@ -40,11 +40,14 @@ from vllm_mindspore.model_executor.models.utils import (convert_pin,
 from vllm_mindspore.model_executor.utils import set_model_context
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
+from vllm.attention.selector import get_attn_backend
+from vllm.model_executor.layers.attention_layer_base import AttentionLayerBase
 
 
-class AttentionWrapper:
+class AttentionWrapper(AttentionLayerBase):
 
     def __init__(self):
+        super().__init__()
         vllm_config = get_current_vllm_config()
         block_size = vllm_config.cache_config.block_size
         num_kv_heads = vllm_config.model_config.get_num_kv_heads(
@@ -67,6 +70,15 @@ class AttentionWrapper:
         self.block_size = block_size
         self.sliding_window = None
         self.kv_sharing_target_layer_name = None
+        self.attn_backend = get_attn_backend(head_size,
+                                             vllm_config.model_config.dtype,
+                                             vllm_config.model_config.dtype,
+                                             block_size,
+                                             False,
+                                             vllm_config.model_config.use_mla,
+                                             False)
+    def get_attn_backend(self):
+        return self.attn_backend
 
 
 class MLAAttentionWrapper(AttentionWrapper):
@@ -135,9 +147,6 @@ class MsModelBase:
             vllm_config.scheduler_config.enable_chunked_prefill)
         self.enable_prefix_caching = (
             vllm_config.cache_config.enable_prefix_caching)
-        self.is_multi_step = vllm_config.scheduler_config.is_multi_step
-        self.is_multi_step_chunked_prefill = (self.is_multi_step
-                                              and self.enable_chunked_prefill)
         self.num_layers = self.model_config.get_num_layers(
             self.parallel_config)
 
@@ -306,6 +315,8 @@ class MsModelBase:
         slot_mapping = [-1 for _ in range(input_len)]
         slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
         return MsAttentionMetadata(
+            num_actual_tokens=input_len,
+            max_query_len=input_len,
             max_seq_len=max_seq_len,
             seq_lens=seq_lengths,
             seq_lens_np=seq_lens_np,
@@ -316,8 +327,7 @@ class MsModelBase:
             # To enforce prefill and decode are both complied in warmup process.
             # So set max_context_lens to 0 for prefill and 1 for decode.
             max_context_lens=0 if not self.has_prefill_warmup else 1,
-            query_start_loc=None,
-            num_prompt_tokens=num_prompt_tokens)
+            )
 
     def prepare_base_inputs(self, input_ids, positions):
         attn_metadata = get_forward_context().attn_metadata
