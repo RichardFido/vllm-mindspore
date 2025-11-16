@@ -323,6 +323,7 @@ def check_ready():
 
     # Common environment variables of predict.
     set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})
+    set_context(jit_syntax_level=ms.STRICT)
     default_env = {
         "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST":
         "FlashAttentionScore,PagedAttention",
