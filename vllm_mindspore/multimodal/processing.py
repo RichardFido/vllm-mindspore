@@ -15,8 +15,10 @@
 # limitations under the License.
 """Adaption for input processor."""
 
-from vllm.inputs.registry import (BatchFeature, InputProcessingContext,
-                                  Mapping, ProcessorMixin)
+from collections.abc import Mapping
+
+from transformers import BatchFeature, ProcessorMixin
+from vllm.multimodal.processing import InputProcessingContext
 
 origin_call_hf_processor = InputProcessingContext.call_hf_processor
 
@@ -34,7 +36,8 @@ def call_hf_processor(
     def _wrapper(func):
 
         def _inner(*args, **kwargs):
-            kwargs["return_tensors"] = "np"
+            # origin return tensors is 'pt', to use mindone, should be 'ms'
+            kwargs["return_tensors"] = "ms"
             return func(*args, **kwargs)
 
         return _inner

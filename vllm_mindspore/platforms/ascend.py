@@ -108,16 +108,6 @@ class AscendPlatform(Platform):
         model_config = vllm_config.model_config
         model_config.disable_cascade_attn = True
 
-        # Cache between p0 and p1 effective only one-on-one situations. In data
-        # parallelelism, it is a one-to-many scenario, cache should be disabled.
-        if (model_config.multimodal_config is not None
-                and not model_config.disable_mm_preprocessor_cache
-                and parallel_config.data_parallel_size > 1):
-            model_config.multimodal_config.disable_mm_preprocessor_cache = True
-            logger.info(
-                "Disable mm preprocessor cache for data parallel size %d.",
-                parallel_config.data_parallel_size)
-
     @classmethod
     def get_attn_backend_cls(cls, selected_backend, head_size, dtype,
                              kv_cache_dtype, block_size, use_v1, use_mla,

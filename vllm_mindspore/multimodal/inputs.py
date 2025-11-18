@@ -122,47 +122,6 @@ def flat_build_elems(
     return [field_factory(data[cast(slice, s)]) for s in self.slices]
 
 
-def batched_reduce_data(self, batch: list[NestedTensors]) -> NestedTensors:
-    # NOTE: vLLM-MindSpore Plugin:
-    # Currently mindspore does not support operating tensors in a
-    # multi-threaded environment, so convert tensors to numpy.
-    if len(batch) > 0 and is_list_of(batch, torch.Tensor, check="all"):
-        if len(batch) == 1:
-            # An optimization when `batch` contains only one tensor:
-            # - produce exactly same result as `torch.stack(batch)`
-            # - will achieve zero-copy if the tensor is contiguous
-            return mindspore.from_numpy(np.expand_dims(batch[0].numpy(), 0))
-        first_shape = batch[0].shape
-        if all(elem.shape == first_shape for elem in batch):
-            return mindspore.from_numpy(np.stack([b.numpy() for b in batch]))
-
-    return batch
-
-
-def flat_reduce_data(self, batch: list[NestedTensors]) -> NestedTensors:
-    # NOTE: vLLM-MindSpore Plugin:
-    # Currently mindspore does not support operating tensors in a
-    # multi-threaded environment, so convert tensors to numpy.
-    if len(batch) > 0 and is_list_of(batch, torch.Tensor, check="all"):
-        if len(batch) == 1:
-            # An optimization when `batch` contains only one tensor:
-            # - produce exactly same result as `torch.concat(batch)`
-            # - will achieve zero-copy if the tensor is contiguous
-            return mindspore.from_numpy(batch[0].numpy())
-
-        def _expect_same_shape(tensor: torch.Tensor):
-            return tensor.shape[:self.dim] + tensor.shape[self.dim + 1:]
-
-        first_shape = _expect_same_shape(batch[0])
-
-        if all(_expect_same_shape(elem) == first_shape for elem in batch):
-            return mindspore.from_numpy(
-                np.concatenat([b.numpy() for b in batch], axis=self.dim))
-
-    assert self.dim == 0, "dim == 0 is required for nested list"
-    return [e for elem in batch for e in elem]
-
-
 @staticmethod
 def _try_stack(nested_tensors: NestedTensors,
                pin_memory: bool = False) -> NestedTensors:

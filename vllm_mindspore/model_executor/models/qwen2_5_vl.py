@@ -53,7 +53,6 @@ from vllm.distributed import get_pp_group, \
     get_tensor_model_parallel_world_size, get_tensor_model_parallel_rank
 from vllm.distributed import utils as dist_utils
 from vllm.logger import init_logger
-from vllm.model_executor import SamplingMetadata
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.module_mapping import MultiModelKeys
 
@@ -204,7 +203,8 @@ class Qwen2VLProcessingInfo(BaseProcessingInfo):
                 min_pixels=min_pixels,
                 max_pixels=max_pixels,
                 size=size,
-                use_fast=kwargs.get("use_fast")),
+                # TODO: mindone not support fast processor yet.
+                use_fast=kwargs.pop("use_fast", False)),
             **kwargs,
         )
 
@@ -428,7 +428,8 @@ class Qwen2_5_VLProcessingInfo(Qwen2VLProcessingInfo):
                 min_pixels=min_pixels,
                 max_pixels=max_pixels,
                 size=size,
-                use_fast=kwargs.get("use_fast")),
+                # TODO: mindone not support fast processor yet.
+                use_fast=kwargs.pop("use_fast", False)),
             **kwargs,
         )
 
@@ -531,18 +532,6 @@ class Qwen2VLMultiModalProcessor(BaseMultiModalProcessor[Qwen2VLProcessingInfo]
     def _get_data_parser(self) -> MultiModalDataParser:
         return Qwen2VLMultiModalDataParser()
 
-    def _call_hf_processor(
-        self,
-        prompt: str,
-        mm_data: Mapping[str, object],
-        mm_kwargs: Mapping[str, object],
-    ) -> BatchFeature:
-        return self.info.ctx.call_hf_processor(
-            self.info.get_hf_processor(**mm_kwargs),
-            dict(text=prompt, **mm_data),
-            self.info._get_image_processor_kwargs(**mm_kwargs),
-        )
-
     def _get_prompt_updates(
         self,
         mm_items: MultiModalDataItems,
@@ -563,7 +552,8 @@ class Qwen2VLMultiModalProcessor(BaseMultiModalProcessor[Qwen2VLProcessingInfo]
         merge_length = image_processor.merge_size**2
 
         def get_replacement_qwen2vl(item_idx: int, modality: str):
-            grid_thw = out_mm_kwargs[f"{modality}_grid_thw"][item_idx]
+            out_item = out_mm_kwargs[modality][item_idx]
+            grid_thw = out_item[f"{modality}_grid_thw"].data
             assert isinstance(grid_thw, ms.Tensor)
 
             num_tokens = int(grid_thw.prod()) // merge_length
@@ -608,7 +598,8 @@ class _Qwen2VLMultiModalProcessor(Qwen2VLMultiModalProcessor):
         merge_length = image_processor.merge_size**2
 
         def get_replacement_qwen2vl(item_idx: int, modality: str):
-            grid_thw = out_mm_kwargs[f"{modality}_grid_thw"][item_idx]
+            out_item = out_mm_kwargs[modality][item_idx]
+            grid_thw = out_item[f"{modality}_grid_thw"].data
             assert isinstance(grid_thw, ms.Tensor)
 
             num_tokens = int(grid_thw.prod()) // merge_length
@@ -1587,10 +1578,8 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
     def compute_logits(
         self,
         hidden_states: ms.Tensor,
-        sampling_metadata: SamplingMetadata,
     ) -> Optional[ms.Tensor]:
-        logits = self.logits_processor(self.lm_head, hidden_states,
-                                       sampling_metadata)
+        logits = self.logits_processor(self.lm_head, hidden_states)
         return logits
 
     def load_weights(

@@ -1037,7 +1037,7 @@ def _calc_mrope_positions(self, scheduler_output):
             src_start = int(num_computed_tokens)
             src_end = int(num_computed_tokens + prompt_part_len)
 
-            self.mrope_positions_cpu[:, dst_start:dst_end] = \
+            self.mrope_positions.cpu[:, dst_start:dst_end] = \
                 req.mrope_positions[:,src_start:src_end]
 
             mrope_pos_ptr += prompt_part_len
@@ -1047,15 +1047,13 @@ def _calc_mrope_positions(self, scheduler_output):
             dst_start = mrope_pos_ptr
             dst_end = mrope_pos_ptr + completion_part_len
 
-            self.mrope_positions_cpu[:, dst_start:dst_end] = \
-                MRotaryEmbedding.get_next_input_positions_tensor(
-                    req.mrope_position_delta,
-                    context_len=num_computed_tokens +
-                    prompt_part_len,
-                    seq_len=num_computed_tokens +
-                    prompt_part_len +
-                    completion_part_len,
-                )
+            MRotaryEmbedding.get_next_input_positions_tensor(
+                out=self.mrope_positions.cpu,
+                out_offset=dst_start,
+                mrope_position_delta=req.mrope_position_delta,
+                context_len=num_computed_tokens + prompt_part_len,
+                num_new_tokens=completion_part_len,
+            )
 
             mrope_pos_ptr += completion_part_len
 

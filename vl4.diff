@@ -1,0 +1,28 @@
+diff --git a/vllm_mindspore/transformers_patch.py b/vllm_mindspore/transformers_patch.py
+index a9b11a2..ca8c7f8 100644
+--- a/vllm_mindspore/transformers_patch.py
++++ b/vllm_mindspore/transformers_patch.py
+@@ -40,12 +40,12 @@ def _patch_processing_module():
+         if not isinstance(mo_submod, types.ModuleType):
+             continue
+ 
+-        # Get all "processing_"* or "*processing*" 
++        # Get all "processing_"* or "*processing*"
+         # or "image_processing_"* in mindone
+         for sub_attr in dir(mo_submod):
+             if ("processing" in sub_attr):
+                 try:
+-                    mo_proc_mod = getattr(mo_submod, sub_attr)
++                    _ = getattr(mo_submod, sub_attr)
+                 except Exception:
+                     continue
+ 
+@@ -69,7 +69,7 @@ def patch_transformers():
+         import mindone  # noqa: F401
+     except ImportError:
+         warnings.warn("mindone.transformers not installed, "
+-                      "skip patching transformers.")
++                      "skip patching transformers.", stacklevel=2)
+         return
+ 
+     import transformers

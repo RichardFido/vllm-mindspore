@@ -18,7 +18,6 @@ import logging
 import os
 
 # It's before the vllm import, so vllm.logger cannot be used here.
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

@@ -599,7 +599,7 @@ class NativeModel(MsModelBase):
         model_inputs, is_prefill = self.prepare_inputs(input_ids, positions,
                                                        intermediate_tensors,
                                                        inputs_embeds)
-
+        model_inputs.update(kwargs)
         # for dummy_attention_metadata
         if is_prefill and not self.has_prefill_warmup:
             self.has_prefill_warmup = True
