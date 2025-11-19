@@ -24,6 +24,7 @@
 /vllm_mindspore/model_executor/layers/quantization/ @erpim @hangangqiang
 /vllm_mindspore/model_executor/model_loader/ @zlq2020 @tronzhang
 /vllm_mindspore/model_executor/models/ @erpim @wang_shaocong
+/vllm_mindspore/model_executor/models/model_base.py @zhaizhiqiang @zlq2020
 /vllm_mindspore/model_executor/models/mf_models/ @erpim @wang_shaocong
 /vllm_mindspore/model_executor/models/mindone_models/ @erpim @wang_shaocong
 /vllm_mindspore/multimodal/ @erpim @wang_shaocong
@@ -37,6 +38,7 @@
 /vllm_mindspore/v1/sample/ @zlq2020 @erpim
 /vllm_mindspore/v1/worker/ @zlq2020 @r1chardf1d0
 /vllm_mindspore/worker/ @zlq2020 @tronzhang
+/vllm_mindspore/utils.py @zhaizhiqiang @zlq2020
 
 # The maintainers of tests/.
 /tests/ @erpim @wang_shaocong
