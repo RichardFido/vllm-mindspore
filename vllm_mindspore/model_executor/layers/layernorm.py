@@ -23,7 +23,6 @@ from typing import Optional, Union
 
 from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore._c_expression import typing
-from mindspore.ops.auto_generate.gen_ops_prim import AddRmsNorm
 from vllm.config import get_current_vllm_config
 
 
@@ -48,7 +47,7 @@ class RMSNorm(nn.Cell):
                                 requires_grad=False)
         self.rms_norm = ops.RmsNorm(eps)
         self.eps = eps
-        self.add_rms_norm = AddRmsNorm()
+        self.add = ops.Add()
 
     def construct(
         self,
@@ -56,8 +55,10 @@ class RMSNorm(nn.Cell):
         residual: Optional[Tensor] = None
     ) -> Union[Tensor, tuple[Tensor, Tensor]]:
         if residual is not None:
-            output, _, residual = self.add_rms_norm(x, residual, self.weight,
-                                                    self.eps)
+            # do not replace the add + rmsnorm with AddRmsNorm,
+            # because the AddRmsNorm will break the pass of Quantization.
+            residual = self.add(x, residual)
+            output = self.rms_norm(residual, self.weight)[0]
             return output, residual
         output = self.rms_norm(x, self.weight)[0]
         return output

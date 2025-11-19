@@ -28,7 +28,8 @@ import tempfile
 import uuid
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator, List, Optional, Tuple, Union
+from typing import (TYPE_CHECKING, Callable, Generator, Generic, List, Mapping,
+                    Optional, Tuple, Union)
 
 import numpy as np
 import torch
@@ -459,3 +460,27 @@ def ms_memory_profiling(
     result.non_torch_increase = diff_from_create.non_torch_memory
     result.profile_time = diff_profile.timestamp
     result.non_kv_cache_memory = result.non_torch_increase + result.torch_peak_increase + result.weights_memory  # noqa
+
+
+# Adapted from: https://stackoverflow.com/a/47212782/5082708
+class LazyDict(Mapping[str, T], Generic[T]):
+
+    def __init__(self, factory: dict[str, Callable[[], T]]):
+        self._factory = factory
+        self._dict: dict[str, T] = {}
+
+    def __getitem__(self, key: str) -> T:
+        if key not in self._dict:
+            if key not in self._factory:
+                raise KeyError(key)
+            self._dict[key] = self._factory[key]()
+        return self._dict[key]
+
+    def __setitem__(self, key: str, value: Callable[[], T]):
+        self._factory[key] = value
+
+    def __iter__(self):
+        return iter(self._factory)
+
+    def __len__(self):
+        return len(self._factory)

@@ -68,6 +68,8 @@ _NATIVE_MODELS = {
     "Qwen2_5_VLForConditionalGeneration":
     ("qwen2_5_vl", "Qwen2_5_VLForConditionalGeneration"),
     "Qwen3MoeForCausalLM": ("qwen3_moe", "Qwen3MoeForCausalLM"),
+    "Qwen3VLForConditionalGeneration":
+    ("qwen3_vl", "Qwen3VLForConditionalGeneration"),
 }
 
 _MINDFORMERS_MODELS = {

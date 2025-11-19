@@ -281,7 +281,7 @@ class Qwen2Model(nn.Cell):
                  decoder_layer_type: type[nn.Cell] = Qwen2DecoderLayer):
         super().__init__()
 
-        config = vllm_config.model_config.hf_config
+        config = vllm_config.model_config.hf_config.get_text_config()
         cache_config = vllm_config.cache_config
         quant_config = vllm_config.quant_config
 
