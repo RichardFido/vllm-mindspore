@@ -68,8 +68,6 @@ import vllm.attention.selector
 
 vllm.attention.selector.current_platform = ascend_platform
 
-import vllm.engine.arg_utils
-
 import vllm.v1.engine.core
 from vllm_mindspore.v1.engine.core import shutdown
 
@@ -112,6 +110,10 @@ vllm.utils.make_tensor_with_pad = make_tensor_with_pad
 vllm.utils.async_tensor_h2d = async_tensor_h2d
 vllm.utils.cuda_is_initialized = ascend_is_initialized
 vllm.utils.memory_profiling = ms_memory_profiling
+
+from vllm_mindspore.engine.arg_utils import _set_default_args
+
+vllm.engine.arg_utils.EngineArgs._set_default_args = _set_default_args
 
 import vllm.lora.utils
 
@@ -442,8 +444,7 @@ if is_dispatch_req_only_by_p0_for_dp:
     # strategies (e.g., external load balancing). This should be made optional
     # in the future.
     from vllm_mindspore.v1.engine.core_client import (
-        MsCoreEngine, get_core_engine_for_request, add_request_async,
-        process_engine_outputs)
+        MsCoreEngine, get_core_engine_for_request, process_engine_outputs)
 
     vllm.entrypoints.cli.serve.CoreEngine = MsCoreEngine
     from vllm.v1.engine import core_client  # noqa: F401
@@ -453,7 +454,6 @@ if is_dispatch_req_only_by_p0_for_dp:
     from vllm.v1.engine.core_client import DPAsyncMPClient
 
     DPAsyncMPClient.get_core_engine_for_request = get_core_engine_for_request
-    DPAsyncMPClient.add_request_async = add_request_async
     DPAsyncMPClient.process_engine_outputs = staticmethod(
         process_engine_outputs)
 

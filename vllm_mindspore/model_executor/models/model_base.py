@@ -21,7 +21,6 @@ from typing import Any, Optional, Union, cast
 
 import mindspore as ms
 import numpy as np
-import vllm.envs as envs
 from mindspore import Tensor, mutable, nn
 from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionType
@@ -334,31 +333,10 @@ class MsModelBase:
             attn_metadata = self._dummy_attention_metadata(
                 input_ids, positions)
         key_cache, value_cache = self.get_kvcache()
-        if not envs.VLLM_USE_V1:
-            # V0
-            seq_lens = attn_metadata.seq_lens
-            max_query_len = attn_metadata.max_query_len
-            # When Mutli-Step is enabled with Chunked-Prefill, prefills and
-            # decodes are scheduled together. In the first step, all the
-            # prefills turn into decodes and max_query_len will be 1.
-            if self.is_multi_step_chunked_prefill and max_query_len == 1:
-                query_lens = [1] * len(seq_lens)
-            else:
-                query_lens = attn_metadata.query_lens
 
-            seq_lens_np = np.array(seq_lens, dtype=np.int32)
-            query_lens_np = np.array(query_lens, dtype=np.int32)
-            kv_cache_lens = seq_lens_np - query_lens_np
-            if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max(
-            ) == 0:
-                is_prefill = True
-            else:
-                is_prefill = False
-        else:
-            # V1
-            is_prefill = attn_metadata.max_context_lens == 0
-            query_lens_np = attn_metadata.q_seq_lens_np
-            seq_lens_np = attn_metadata.seq_lens_np
+        is_prefill = attn_metadata.max_context_lens == 0
+        query_lens_np = attn_metadata.q_seq_lens_np
+        seq_lens_np = attn_metadata.seq_lens_np
 
         if input_ids is not None:
             input_ids = input_ids.astype(ms.int32)
@@ -535,9 +513,9 @@ class NativeModel(MsModelBase):
         """
         if self.moe_dp_need_pad:
             dp_meta = get_forward_context().dp_metadata
-            token_num_total_cumsum = dp_meta.cu_tokens_across_dp_cpu
+            token_num_total = dp_meta.num_tokens_across_dp_cpu.asnumpy()
             max_token_num = dp_meta.max_tokens_across_dp_cpu
-            token_num_total_cumsum = token_num_total_cumsum.numpy()
+            token_num_total_cumsum = token_num_total.cumsum()
             max_token_num = max_token_num.numpy()
 
             token_num_total = np.diff(token_num_total_cumsum, prepend=0)
