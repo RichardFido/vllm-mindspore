@@ -219,7 +219,7 @@ vllm.executor.ray_distributed_executor.initialize_ray_cluster = (
 vllm.v1.engine.utils.CoreEngineActorManager.__init__ = (
     core_engine_actor_manager_init)
 
-from .config import (_verify_quantization, _verify_args, vllm_config_post_init,
+from .config import (_verify_quantization, vllm_config_post_init,
                      vllm_config_get_quantization_config, model_post_init,
                      _get_and_verify_dtype, stateless_init_dp_group,
                      has_unfinished_dp)
@@ -228,7 +228,6 @@ vllm.config.ModelConfig._verify_quantization = _verify_quantization
 vllm.config.VllmConfig.__post_init__ = vllm_config_post_init
 vllm.config.VllmConfig._get_quantization_config = staticmethod(
     vllm_config_get_quantization_config)
-vllm.config.SchedulerConfig._verify_args = _verify_args
 vllm.config.CompilationConfig.model_post_init = model_post_init
 vllm.config._get_and_verify_dtype = _get_and_verify_dtype
 vllm.config.ParallelConfig.stateless_init_dp_group = stateless_init_dp_group

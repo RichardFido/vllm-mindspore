@@ -45,7 +45,8 @@ def env_setup(target_env_dict=None):
             # For CPU communication timeout setting,
             # default is 15s, change to 180s
             # to avoid multi node timeout when starting service.
-            "MS_NODE_TIMEOUT": "180"
+            "MS_NODE_TIMEOUT": "180",
+            "MS_ALLOC_CONF": "enable_vmm:true"
         }
 
     for key, value in target_env_dict.items():
