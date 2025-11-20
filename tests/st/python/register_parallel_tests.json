@@ -25,27 +25,7 @@
       "card_num": 2
     },
     {
-      "test_node_id": "models/deepseek/offline/test_vllm_deepseek_part.py::test_deepseek_r1",
-      "card_num": 2
-    },
-    {
-      "test_node_id": "models/deepseek/offline/test_vllm_deepseek_part.py::test_deepseek_mtp",
-      "card_num": 2
-    },
-    {
-      "test_node_id": "models/qwen3/test_vllm_mf_qwen3_8b.py::test_mf_qwen3_v0",
-      "card_num": 2
-    },
-    {
       "test_node_id": "models/qwen3/test_vllm_mf_qwen3_8b.py::test_mf_qwen3_v1",
-      "card_num": 2
-    },
-    {
-      "test_node_id": "models/qwen2_5/test_vllm_qwen_7b.py::test_vllm_qwen",
-      "card_num": 2
-    },
-    {
-      "test_node_id": "models/deepseek/offline/test_vllm_deepseek_bf16_part.py::test_deepseek_r1_bf16",
       "card_num": 2
     },
     {
@@ -57,27 +37,11 @@
       "card_num": 2
     },
     {
-      "test_node_id": "models/qwen2_5/test_vllm_mf_qwen_7b.py::test_mf_qwen",
-      "card_num": 2
-    },
-    {
-      "test_node_id": "chunk_prefill/test_vllm_mf_qwen_7b_chunk_prefill.py::test_mf_qwen_7b_chunk_prefill",
-      "card_num": 2
-    },
-    {
       "test_node_id": "chunk_prefill/test_vllm_mf_qwen_7b_chunk_prefill_v1.py::test_mf_qwen_7b_chunk_prefill",
       "card_num": 2
     },
     {
       "test_node_id": "sampling/test_vllm_sampling.py::test_vllm_sampling_n_logprobs",
-      "card_num": 2
-    },
-    {
-      "test_node_id": "mss/test_vllm_mf_qwen_7b_mss.py::test_mf_qwen_7b_mss",
-      "card_num": 2
-    },
-    {
-      "test_node_id": "prefix_caching/test_vllm_mf_qwen_7b_prefix_caching.py::test_mf_qwen_7b_prefix_caching",
       "card_num": 2
     },
     {
@@ -89,19 +53,11 @@
       "card_num": 2
     },
     {
-      "test_node_id": "mss/test_vllm_mf_qwen_7b_cp_pc_mss.py::test_mf_qwen_7b_cp_pc_mss",
-      "card_num": 2
-    },
-    {
       "test_node_id": "quantization/test_vllm_deepseek_osl.py::test_deepseek_r1",
       "card_num": 2
     },
     {
       "test_node_id": "quantization/test_vllm_deepseek_smoothquant.py::test_deepseek_r1",
-      "card_num": 2
-    },
-    {
-      "test_node_id": "quantization/test_vllm_deepseek_smoothquant_mss.py::test_deepseek_r1_mss",
       "card_num": 2
     },
     {

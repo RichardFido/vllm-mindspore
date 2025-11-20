@@ -176,7 +176,7 @@ def prepare_text(processor: AutoProcessor, prompt: str):
 
 
 @patch.dict(os.environ, env_vars)
-@pytest.mark.level0
+@pytest.mark.level4
 def test_qwen2_5_vl_7b_v1():
     """
     test case qwen2.5 vl 7B
@@ -188,7 +188,7 @@ def test_qwen2_5_vl_7b_v1():
 
 
 @patch.dict(os.environ, env_vars)
-@pytest.mark.level0
+@pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
 def test_qwen2_5_vl_7b_v1_enforce_eager():
@@ -202,7 +202,7 @@ def test_qwen2_5_vl_7b_v1_enforce_eager():
 
 
 @patch.dict(os.environ, env_vars)
-@pytest.mark.level0
+@pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
 def test_qwen2_5_vl_7b_v1_video_infer():

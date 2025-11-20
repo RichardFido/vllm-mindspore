@@ -24,13 +24,11 @@ from mindformers.core.context import build_mf_context, build_parallel_context
 from mindspore import Tensor, mutable, ops
 from mindspore.common.api import _no_grad as no_grad
 from mindspore.nn.utils import no_init_parameters
-from vllm import envs
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.distributed.parallel_state import get_dp_group, get_pp_group
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.models.interfaces import SupportsPP
-from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
@@ -276,41 +274,26 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         # so we just take one by default
         if isinstance(attn_metadata, dict) and '1' in attn_metadata:
             attn_metadata = attn_metadata['1']
+
         if attn_metadata is None:
+            # To enable dummy_run in chunked scenarios, set q_seq_lens_np
+            # to be greater than 1.
+            if self.has_prefill_warmup and not self.has_chunked_warmup:
+                input_ids = ms.ops.cat((input_ids, input_ids))
+                positions = ms.ops.cat((positions, ms.tensor([1])))
+
             attn_metadata = self._dummy_attention_metadata(
                 input_ids, positions)
-        key_cache, value_cache = self.get_kvcache()
-        if not envs.VLLM_USE_V1:
-            # V0
-            seq_lens = attn_metadata.seq_lens
-            max_query_len = attn_metadata.max_query_len
-            # When Mutli-Step is enabled with Chunked-Prefill, prefills and
-            # decodes are scheduled together. In the first step, all the
-            # prefills turn into decodes and max_query_len will be 1.
-            if self.is_multi_step_chunked_prefill and max_query_len == 1:
-                query_lens = [1] * len(seq_lens)
-            else:
-                query_lens = attn_metadata.query_lens
 
-            seq_lens_np = np.array(seq_lens, dtype=np.int32)
-            query_lens_np = np.array(query_lens, dtype=np.int32)
-            kv_cache_lens = seq_lens_np - query_lens_np
-            is_prefill = kv_cache_lens.max() == 0
-            is_ringmla_chunked = self.use_ringmla and \
-                                 attn_metadata.num_decode_tokens == 0 and \
-                                 bool(kv_cache_lens.max() > 0)
-            context_lens_tensor = ms.from_numpy(kv_cache_lens)
-        else:
-            # V1
-            is_prefill = attn_metadata.max_context_lens == 0
-            is_ringmla_chunked = \
-                self.use_ringmla and not is_prefill and \
-                bool((attn_metadata.context_lens - \
-                      attn_metadata.num_prompt_tokens).min() < 0 or
-                      attn_metadata.q_seq_lens_np.max() > 1)
-            query_lens_np = attn_metadata.q_seq_lens_np
-            seq_lens_np = attn_metadata.seq_lens_np
-            context_lens_tensor = attn_metadata.context_lens
+        key_cache, value_cache = self.get_kvcache()
+
+        is_prefill = attn_metadata.max_context_lens == 0
+        is_ringmla_chunked = \
+            self.use_ringmla and not is_prefill and \
+            bool(attn_metadata.q_seq_lens_np.max() > 1)
+        query_lens_np = attn_metadata.q_seq_lens_np
+        seq_lens_np = attn_metadata.seq_lens_np
+        context_lens_tensor = attn_metadata.context_lens
 
         q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
         position_ids = ms.Tensor(positions, dtype=ms.int32)
@@ -424,6 +407,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             return
         thread_num = 4
         kernel_group_num = 16
+
         ms.runtime.set_kernel_launch_group(thread_num=thread_num,
                                            kernel_group_num=kernel_group_num)
         cls._set_launch_group = True
@@ -431,21 +415,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
     def compute_logits(
         self,
         hidden_states: Tensor,
-        sampling_metadata: SamplingMetadata,
     ) -> Optional[Tensor]:
-        if sampling_metadata is not None:
-            selected_token_indices = sampling_metadata.selected_token_indices
-            if (selected_token_indices is not None
-                    and selected_token_indices.numel() <= 0):
-                logits = ms.mint.zeros(
-                    (0, self.model_config.hf_config.vocab_size),
-                    dtype=self.model_config.dtype)
-                return logits
-            else:
-                hidden_states = hidden_states.reshape(
-                    (-1, hidden_states.shape[-1]))
-                hidden_states = hidden_states.index_select(
-                    0, selected_token_indices)
         if is_310p():
             # To get better performance in 310p, the lm head should run
             # in O0 mode to avoid transdata, 910 keep the original process.

@@ -21,15 +21,16 @@ from typing import Any, Optional, Union, cast
 
 import mindspore as ms
 import numpy as np
-import vllm.envs as envs
 from mindspore import Tensor, mutable, nn
 from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionType
+from vllm.attention.selector import get_attn_backend
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.distributed import get_dp_group, get_ep_group
 from vllm.forward_context import get_forward_context
-from vllm.model_executor.sampling_metadata import SamplingMetadata
+from vllm.model_executor.layers.attention_layer_base import AttentionLayerBase
 from vllm.sequence import IntermediateTensors
+from vllm.v1.sample.metadata import SamplingMetadata
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
@@ -42,9 +43,10 @@ from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 
-class AttentionWrapper:
+class AttentionWrapper(AttentionLayerBase):
 
     def __init__(self):
+        super().__init__()
         vllm_config = get_current_vllm_config()
         block_size = vllm_config.cache_config.block_size
         num_kv_heads = vllm_config.model_config.get_num_kv_heads(
@@ -67,6 +69,15 @@ class AttentionWrapper:
         self.block_size = block_size
         self.sliding_window = None
         self.kv_sharing_target_layer_name = None
+        self.attn_backend = get_attn_backend(head_size,
+                                             vllm_config.model_config.dtype,
+                                             vllm_config.model_config.dtype,
+                                             block_size, False,
+                                             vllm_config.model_config.use_mla,
+                                             False)
+
+    def get_attn_backend(self):
+        return self.attn_backend
 
 
 class MLAAttentionWrapper(AttentionWrapper):
@@ -135,9 +146,6 @@ class MsModelBase:
             vllm_config.scheduler_config.enable_chunked_prefill)
         self.enable_prefix_caching = (
             vllm_config.cache_config.enable_prefix_caching)
-        self.is_multi_step = vllm_config.scheduler_config.is_multi_step
-        self.is_multi_step_chunked_prefill = (self.is_multi_step
-                                              and self.enable_chunked_prefill)
         self.num_layers = self.model_config.get_num_layers(
             self.parallel_config)
 
@@ -297,15 +305,12 @@ class MsModelBase:
         # context len is 0 for prefill, and 1 for chunked and decode.
         context_lens_tensor = ms.Tensor([0], dtype=ms.int32) if not (
             self.has_prefill_warmup) else ms.Tensor([1], dtype=ms.int32)
-        # num_prompt_tokens is equal to seq_len for prefill and decode,
-        # and equal to seq_len + 1 for chunked.
-        num_prompt_tokens = seq_lengths + 1 \
-            if (self.has_prefill_warmup and not self.has_chunked_warmup) \
-            else seq_lengths
         block_tables = ms.Tensor([[0]], dtype=ms.int32)
         slot_mapping = [-1 for _ in range(input_len)]
         slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
         return MsAttentionMetadata(
+            num_actual_tokens=input_len,
+            max_query_len=input_len,
             max_seq_len=max_seq_len,
             seq_lens=seq_lengths,
             seq_lens_np=seq_lens_np,
@@ -316,8 +321,7 @@ class MsModelBase:
             # To enforce prefill and decode are both complied in warmup process.
             # So set max_context_lens to 0 for prefill and 1 for decode.
             max_context_lens=0 if not self.has_prefill_warmup else 1,
-            query_start_loc=None,
-            num_prompt_tokens=num_prompt_tokens)
+        )
 
     def prepare_base_inputs(self, input_ids, positions):
         attn_metadata = get_forward_context().attn_metadata
@@ -329,31 +333,10 @@ class MsModelBase:
             attn_metadata = self._dummy_attention_metadata(
                 input_ids, positions)
         key_cache, value_cache = self.get_kvcache()
-        if not envs.VLLM_USE_V1:
-            # V0
-            seq_lens = attn_metadata.seq_lens
-            max_query_len = attn_metadata.max_query_len
-            # When Mutli-Step is enabled with Chunked-Prefill, prefills and
-            # decodes are scheduled together. In the first step, all the
-            # prefills turn into decodes and max_query_len will be 1.
-            if self.is_multi_step_chunked_prefill and max_query_len == 1:
-                query_lens = [1] * len(seq_lens)
-            else:
-                query_lens = attn_metadata.query_lens
 
-            seq_lens_np = np.array(seq_lens, dtype=np.int32)
-            query_lens_np = np.array(query_lens, dtype=np.int32)
-            kv_cache_lens = seq_lens_np - query_lens_np
-            if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max(
-            ) == 0:
-                is_prefill = True
-            else:
-                is_prefill = False
-        else:
-            # V1
-            is_prefill = attn_metadata.max_context_lens == 0
-            query_lens_np = attn_metadata.q_seq_lens_np
-            seq_lens_np = attn_metadata.seq_lens_np
+        is_prefill = attn_metadata.max_context_lens == 0
+        query_lens_np = attn_metadata.q_seq_lens_np
+        seq_lens_np = attn_metadata.seq_lens_np
 
         if input_ids is not None:
             input_ids = input_ids.astype(ms.int32)
@@ -530,9 +513,9 @@ class NativeModel(MsModelBase):
         """
         if self.moe_dp_need_pad:
             dp_meta = get_forward_context().dp_metadata
-            token_num_total_cumsum = dp_meta.cu_tokens_across_dp_cpu
+            token_num_total = dp_meta.num_tokens_across_dp_cpu.asnumpy()
             max_token_num = dp_meta.max_tokens_across_dp_cpu
-            token_num_total_cumsum = token_num_total_cumsum.numpy()
+            token_num_total_cumsum = token_num_total.cumsum()
             max_token_num = max_token_num.numpy()
 
             token_num_total = np.diff(token_num_total_cumsum, prepend=0)
