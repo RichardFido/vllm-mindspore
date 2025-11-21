@@ -44,6 +44,8 @@ class SupportsMultiModal(Protocol):
         MRO of your model class.
     """
 
+    merge_by_field_config: ClassVar[bool] = False
+
     def get_multimodal_embeddings(
             self, **kwargs: object) -> Optional[MultiModalEmbeddings]:
         """

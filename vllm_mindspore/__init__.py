@@ -22,9 +22,11 @@ import warnings
 import msadapter  # noqa: F401
 from vllm_mindspore.msadapter_patch import patch_msadapter
 from vllm_mindspore.ray_patch import patch_ray
+from vllm_mindspore.transformers_patch import patch_transformers
 
 patch_msadapter()
 patch_ray()
+patch_transformers()
 
 if "vllm" in sys.modules:
     # Check models variable in sub process, cannot raise here.
@@ -217,7 +219,7 @@ vllm.executor.ray_distributed_executor.initialize_ray_cluster = (
 vllm.v1.engine.utils.CoreEngineActorManager.__init__ = (
     core_engine_actor_manager_init)
 
-from .config import (_verify_quantization, _verify_args, vllm_config_post_init,
+from .config import (_verify_quantization, vllm_config_post_init,
                      vllm_config_get_quantization_config, model_post_init,
                      _get_and_verify_dtype, stateless_init_dp_group,
                      has_unfinished_dp)
@@ -226,7 +228,6 @@ vllm.config.ModelConfig._verify_quantization = _verify_quantization
 vllm.config.VllmConfig.__post_init__ = vllm_config_post_init
 vllm.config.VllmConfig._get_quantization_config = staticmethod(
     vllm_config_get_quantization_config)
-vllm.config.SchedulerConfig._verify_args = _verify_args
 vllm.config.CompilationConfig.model_post_init = model_post_init
 vllm.config._get_and_verify_dtype = _get_and_verify_dtype
 vllm.config.ParallelConfig.stateless_init_dp_group = stateless_init_dp_group
@@ -235,18 +236,14 @@ vllm.config.ParallelConfig.has_unfinished_dp = has_unfinished_dp
 from .utils import update_modules
 
 ######### for multi-model
-from vllm_mindspore.multimodal.inputs import (as_kwargs, batched_reduce_data,
-                                              flat_build_elems,
-                                              flat_reduce_data, from_items,
-                                              MultiModalFieldElem, _try_stack)
+from vllm_mindspore.multimodal.inputs import (as_kwargs, flat_build_elems,
+                                              from_items, MultiModalFieldElem,
+                                              _try_stack)
 
-from vllm.multimodal.inputs import MultiModalBatchedField
 from vllm.multimodal.inputs import MultiModalFlatField
 from vllm.multimodal.inputs import MultiModalKwargs
 
-MultiModalBatchedField._reduce_data = batched_reduce_data
 MultiModalFlatField.build_elems = flat_build_elems
-MultiModalFlatField._reduce_data = flat_reduce_data
 MultiModalKwargs.as_kwargs = as_kwargs
 MultiModalKwargs.from_items = from_items
 MultiModalKwargs._try_stack = _try_stack
@@ -463,5 +460,10 @@ from vllm.v1.engine.processor import Processor
 
 Processor._validate_sampling_params = v1_process_validate_sampling_params
 Processor._validate_structured_output = v1_process_validate_structured_output
+
+from vllm_mindspore.multimodal.processing import call_hf_processor
+from vllm.multimodal.processing import InputProcessingContext
+
+InputProcessingContext.call_hf_processor = call_hf_processor
 
 check_ready()

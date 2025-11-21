@@ -25,7 +25,6 @@ import numpy as np
 from PIL import Image
 from tests.st.python.utils.env_var_manager import EnvVarManager
 from tests.st.python.models.qwen2_5_vl.similarity import compare_distance
-from transformers import AutoProcessor
 from tests.st.python.utils.common_utils import (teardown_function,
                                                 setup_function, MODEL_PATH)
 
@@ -154,7 +153,7 @@ def video_to_ndarrays(path: str, num_frames: int = -1) -> np.ndarray:
     return np.stack(all_frames)
 
 
-def prepare_text(processor: AutoProcessor, prompt: str):
+def prepare_text(processor, prompt: str):
     messages = [{
         "role":
         "user",
@@ -176,7 +175,7 @@ def prepare_text(processor: AutoProcessor, prompt: str):
 
 
 @patch.dict(os.environ, env_vars)
-@pytest.mark.level4
+@pytest.mark.level0
 def test_qwen2_5_vl_7b_v1():
     """
     test case qwen2.5 vl 7B
@@ -188,7 +187,7 @@ def test_qwen2_5_vl_7b_v1():
 
 
 @patch.dict(os.environ, env_vars)
-@pytest.mark.level4
+@pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
 def test_qwen2_5_vl_7b_v1_enforce_eager():
@@ -202,7 +201,7 @@ def test_qwen2_5_vl_7b_v1_enforce_eager():
 
 
 @patch.dict(os.environ, env_vars)
-@pytest.mark.level4
+@pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
 def test_qwen2_5_vl_7b_v1_video_infer():
@@ -212,6 +211,7 @@ def test_qwen2_5_vl_7b_v1_video_infer():
     frames = video_to_ndarrays(video_path, num_frames=10)
     print("frames shape", frames.shape)
 
+    from transformers import AutoProcessor
     processor = AutoProcessor.from_pretrained(model_path)
 
     prompts = [

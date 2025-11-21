@@ -5,8 +5,9 @@ from typing import Any, Union
 
 import mindspore as ms
 import numpy as np
-import torch
 from msgspec import msgpack
+
+np_bfloat16 = "bfloat16"
 
 mstype_str_to_np_type = {
     "Bool": np.bool_,
@@ -20,10 +21,11 @@ mstype_str_to_np_type = {
     "Uint64": np.uint64,
     "Float16": np.float16,
     "Float32": np.float32,
+    "BFloat16": np_bfloat16,
 }
 
 
-def _decode_tensor(self, arr: Any) -> torch.Tensor:
+def _decode_tensor(self, arr: Any) -> ms.Tensor:
     dtype, shape, data = arr
     # Copy from inline representation, to decouple the memory storage
     # of the message from the original buffer. And also make Torch
@@ -32,18 +34,18 @@ def _decode_tensor(self, arr: Any) -> torch.Tensor:
         else bytearray(data)
     if not buffer:  # torch.frombuffer doesn't like empty buffers
         assert 0 in shape
-        return torch.empty(shape, dtype=dtype)
+        return ms.mint.empty(shape, dtype=dtype)
     # Create uint8 array
-    arr = torch.frombuffer(buffer, dtype=torch.uint8)
+    arr = np.frombuffer(buffer, dtype=np.uint8)
     # Convert back to proper shape & type
-    arr = arr.numpy().view(dtype=mstype_str_to_np_type[dtype]).reshape(shape)
+    arr = arr.view(dtype=mstype_str_to_np_type[dtype]).reshape(shape)
     tensor = ms.from_numpy(arr)
     return tensor
 
 
 def _encode_tensor(
-        self, obj: torch.Tensor
-) -> tuple[str, tuple[int, ...], Union[int, memoryview]]:
+        self,
+        obj: ms.Tensor) -> tuple[str, tuple[int, ...], Union[int, memoryview]]:
     assert self.aux_buffers is not None
     # view the tensor as a contiguous 1D array of bytes
     # NOTE: vLLM-MindSpore Plugin:
