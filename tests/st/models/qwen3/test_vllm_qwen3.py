@@ -38,7 +38,7 @@ env_vars = {
 }
 
 
-def run_vllm_qwen3_8b(enforce_eager=False):
+def run_vllm_qwen3_8b(enforce_eager=False, tp_size=1):
     """
     run case qwen3 8B
     """
@@ -57,7 +57,7 @@ def run_vllm_qwen3_8b(enforce_eager=False):
     # Create an LLM.
     llm = LLM(model=MODEL_PATH["Qwen3-8B"],
               gpu_memory_utilization=0.9,
-              tensor_parallel_size=1,
+              tensor_parallel_size=tp_size,
               enforce_eager=enforce_eager,
               max_model_len=4096)
     # Generate texts from the prompts.
@@ -151,3 +151,18 @@ def test_qwen3_enforce_eager():
     """
     import vllm_mindspore
     run_vllm_qwen3_8b(enforce_eager=True)
+
+
+@patch.dict(os.environ, env_vars)
+@pytest.mark.level0
+def test_vllm_qwen3_8b_310p():
+    """
+    Test Summary:
+        Test qwen3 8B using enforce_eager.
+    Expected Result:
+        Running successfully, the request result meets expectations
+    Model Info:
+        Qwen3-8B
+    """
+    import vllm_mindspore
+    run_vllm_qwen3_8b(tp_size=2)
