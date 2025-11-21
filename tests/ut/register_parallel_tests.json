@@ -1,0 +1,9 @@
+{
+  "registered_910b_tests": [
+    {
+      "test_node_id": "ut/sampling/test_vllm_sampling.py::test_vllm_sampling_n_logprobs",
+      "card_num": 2
+    }
+  ],
+  "registered_310p_tests": []
+}
