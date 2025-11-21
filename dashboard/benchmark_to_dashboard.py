@@ -168,7 +168,7 @@ def start_vllm_mindspore_server(model: str, serve_args: str):
     output_thread = threading.Thread(target=read_output, daemon=True)
     output_thread.start()
 
-    for _ in range(1800):
+    for _ in range(1200):
         try:
             # 收集当前所有可用的日志
             while True:
@@ -304,6 +304,11 @@ def generate_model_html(display_name: str, model_dir: str, csv_file: str):
         "total_token_throughput(tok/s)",
     ]
     latency_cols = ["mean_ttft(ms)", "mean_tpot(ms)", "mean_itl(ms)"]
+    init_time_cols = [
+        "load_weight_time(s)", "model_loading_time(s)", "init_engine_time(s)"
+    ]
+    kv_cache_cols = ["kv_cache_memory(GB)"]
+    acc_cols = ["ceval", "gsm8k"]
 
     def plot_and_encode(y_cols, ylabel):
         fig, ax = plt.subplots(figsize=(6, 3))
@@ -318,6 +323,8 @@ def generate_model_html(display_name: str, model_dir: str, csv_file: str):
                 label=c,
                 color=COLOR_LIST[i % len(COLOR_LIST)],
             )
+        # 旋转日期标签以避免重叠
+        plt.xticks(rotation=45)
         ax.set_xlabel("Time")
         ax.set_ylabel(ylabel)
         ax.legend(fontsize=8)
@@ -329,12 +336,15 @@ def generate_model_html(display_name: str, model_dir: str, csv_file: str):
 
     throughput_img = plot_and_encode(throughput_cols, "TPS")
     latency_img = plot_and_encode(latency_cols, "Latency (ms)")
+    init_time_img = plot_and_encode(init_time_cols, "Init time (s)")
+    kv_cache_img = plot_and_encode(kv_cache_cols, "KV Cache (GB)")
+    acc_img = plot_and_encode(acc_cols, "Accuracy")
 
     html = f"""
 <html>
 <head>
 <meta charset="utf-8">
-<title>Benchmark - {display_name}</title>
+<title>vLLM-mindspore Benchmark - {display_name}</title>
 <link rel="stylesheet"
  href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -342,16 +352,20 @@ def generate_model_html(display_name: str, model_dir: str, csv_file: str):
  src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 <style>
 body{{font-family:Arial,sans-serif; margin:20px;}}
-.graph-container{{display:flex; flex-wrap:wrap; gap:4%;
+.graph-container{{display:flex; flex-wrap:nowrap; gap:0%;
  justify-content:space-between;}}
-.graph-container div{{flex: 0 0 48%;}}
+.graph-container div{{flex: 0 0 20%;}}
 .graph-container img{{width:100%; height:auto;}}
 h1{{color:#1f77b4;}}
 
 /* 固定表头样式 */
 .table-container {{
-    max-height: calc(100vh - 100px);
+    max-height: calc(149vh - 600px);
     overflow: auto;
+    transform: scale(0.67);  /* 添加这行 */
+    transform-origin: top left;  /* 缩放起点 */
+    width: 149%;  /* 100% / 0.67 ≈ 154% */
+    //height: 149%; /* 保持比例 */
 }}
 
 #metrics thead th {{
@@ -364,7 +378,7 @@ h1{{color:#1f77b4;}}
 </style>
 </head>
 <body>
-<h1>Benchmark - {display_name}</h1>
+<h1>vLLM-mindspore Benchmark - {display_name}</h1>
 
 <div class="graph-container">
     <div>
@@ -374,6 +388,18 @@ h1{{color:#1f77b4;}}
     <div>
         <h2>Latency</h2>
         <img src="data:image/png;base64,{latency_img}">
+    </div>
+    <div>
+        <h2>Init Time</h2>
+        <img src="data:image/png;base64,{init_time_img}">
+    </div>
+    <div>
+        <h2>KV Cache</h2>
+        <img src="data:image/png;base64,{kv_cache_img}">
+    </div>
+    <div>
+        <h2>Accuracy</h2>
+        <img src="data:image/png;base64,{acc_img}">
     </div>
 </div>
 
@@ -532,7 +558,7 @@ def generate_index_html(base_dir="results"):
 <html>
 <head>
 <meta charset="utf-8">
-<title>Benchmark Dashboard</title>
+<title>vLLM-mindspore Benchmark Dashboard</title>
 <link rel="stylesheet"
  href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -545,8 +571,12 @@ td{{vertical-align:top;}}
 
 /* 固定表头样式 */
 .table-container {{
-    max-height: calc(100vh - 100px);
+    max-height: calc(149vh - 100px);
     overflow: auto;
+    transform: scale(0.67);  /* 添加这行 */
+    transform-origin: top left;  /* 缩放起点 */
+    width: 149%;  /* 100% / 0.67 ≈ 154% */
+    //height: 149%; /* 保持比例 */
 }}
 
 #dashboard thead th {{
@@ -559,7 +589,7 @@ td{{vertical-align:top;}}
 </style>
 </head>
 <body>
-<h1>Benchmark Dashboard</h1>
+<h1>vLLM-mindspore Benchmark Dashboard</h1>
 <div class="table-container">
 <table id="dashboard" class="display" style="width:100%">
 <thead><tr>{header_cells}</tr></thead>
@@ -585,6 +615,8 @@ $(document).ready(function(){{
 
 
 def run_eval(model, do_ceval=True, do_gsm8k=True):
+    if model == "/home/ric/ckpt":
+        return 0, 0
     ais_bench_path = os.environ["AIS_BENCH_PATH"]
     validate_args(ais_bench_path)
     ceval_acc = 0
@@ -658,10 +690,24 @@ if __name__ == "__main__":
         raise ValueError("⚠️ display-name 数量必须与 bench-args 数量一致")
 
     print(f"\n===== Starting server for model: {args.model} =====")
+    debug = 0
+    if debug:
+        for bench_args, display_name in zip(bench_args_list, display_names):
+            safe_name = sanitize_name(display_name)
+            base_dir = "results"
+            model_dir = os.path.join(base_dir, safe_name)
+            os.makedirs(model_dir, exist_ok=True)
+            csv_file = os.path.join(model_dir, "benchmark.csv")
+            generate_model_html(display_name, model_dir, csv_file)
+        generate_index_html()
+        import sys
+        sys.exit(0)
+
     server, server_log = start_vllm_mindspore_server(args.model,
                                                      args.serve_args)
     metrics_server = parse_serving_output(server_log)
     print("metrics_server:", metrics_server)
+    # assert 0
 
     try:
         do_ceval, do_gsm8k = True, True
