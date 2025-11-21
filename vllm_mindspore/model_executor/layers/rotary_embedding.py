@@ -290,6 +290,8 @@ class MRotaryEmbedding(RotaryEmbedding):
         super().__init__(head_size, rotary_dim, self.cache_max_position_num,
                          base, is_neox_style, dtype)
 
+        self.is_eager_mode = (
+            get_current_vllm_config().model_config.enforce_eager)
         self.mrope_section = mrope_section
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
@@ -380,6 +382,9 @@ class MRotaryEmbedding(RotaryEmbedding):
         if self.is_neox_style and self.rotary_dim == self.head_size:
             freqs_cos = mint.cat((cos, cos), dim=-1)
             freqs_sin = mint.cat((sin, sin), dim=-1)
+            if self.is_eager_mode:
+                query = query.contiguous()
+                key = key.contiguous()
             query, key = self.rotary_embedding_op(query, key, freqs_cos,
                                                   freqs_sin,
                                                   batch_valid_length)
