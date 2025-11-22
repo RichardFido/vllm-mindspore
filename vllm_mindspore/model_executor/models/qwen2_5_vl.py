@@ -180,7 +180,7 @@ Qwen2_5_VLVideoInputs = Union[Qwen2_5_VLVideoPixelInputs,
                               Qwen2_5_VLVideoEmbeddingInputs]
 
 # For profile run
-_MAX_FRAMES_PER_VIDEO = 16
+_MAX_FRAMES_PER_VIDEO = 14
 # === Vision Inputs === #
 
 
@@ -339,6 +339,7 @@ class Qwen2VLProcessingInfo(BaseProcessingInfo):
         max_image_size, _ = self._get_vision_info(
             image_width=9999999,
             image_height=9999999,
+            num_frames=1,
             image_processor=None,
         )
         return max_image_size
@@ -352,10 +353,12 @@ class Qwen2VLProcessingInfo(BaseProcessingInfo):
             image_processor=None,
         )
 
-    def _get_max_video_frames(self, max_tokens: int) -> int:
+    def _get_max_video_frames(self,
+                              max_tokens: int,
+                              start_num_frames: int = 1) -> int:
         target_width, target_height = self.get_image_size_with_most_features()
 
-        num_frames = 0
+        num_frames = start_num_frames
 
         while True:
             next_num_frames = num_frames + 1
@@ -374,10 +377,10 @@ class Qwen2VLProcessingInfo(BaseProcessingInfo):
         return num_frames
 
     def get_num_frames_with_most_features(
-        self,
-        seq_len: int,
-        mm_counts: Mapping[str, int],
-    ) -> int:
+            self,
+            seq_len: int,
+            mm_counts: Mapping[str, int],
+            max_frames_per_video: int = _MAX_FRAMES_PER_VIDEO) -> int:
         max_images = mm_counts.get("image", 0)
         max_videos = mm_counts.get("video", 0)
 
@@ -385,7 +388,7 @@ class Qwen2VLProcessingInfo(BaseProcessingInfo):
         max_total_frames = self._get_max_video_frames(seq_len -
                                                       max_image_tokens)
         max_frames_per_video = min(max_total_frames // max(max_videos, 1),
-                                   _MAX_FRAMES_PER_VIDEO)
+                                   max_frames_per_video)
 
         return max(max_frames_per_video, 1)
 

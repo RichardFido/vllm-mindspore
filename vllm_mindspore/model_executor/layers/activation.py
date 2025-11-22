@@ -20,6 +20,8 @@
 
 from mindspore import mint, nn, ops
 
+from vllm_mindspore.utils import LazyDict
+
 
 class SiluAndMul(nn.Cell):
     """An activation function for SwiGLU.
@@ -39,3 +41,9 @@ class SiluAndMul(nn.Cell):
         d = x.shape[-1] // 2
         gate, hidden = self.split(x, [d, d], dim=-1)
         return mint.mul(hidden, mint.nn.functional.silu(gate))
+
+
+_ACTIVATION_REGISTRY = LazyDict({
+    "gelu_pytorch_tanh":
+    lambda: mint.nn.GELU(approximate="tanh"),
+})
