@@ -32,9 +32,10 @@ from typing import Any, Optional
 import mindspore as ms
 import mindspore.mint.nn.functional as F
 import numpy as np
-from mindspore import Parameter, Tensor, mint, mutable, nn
+from mindspore import Parameter, Tensor, mint, mutable, nn, ops
 from mindspore.common import dtype as mstype
-from mindspore.ops.operations.nn_ops import FlashAttentionScore
+from mindspore.ops.operations.nn_ops import (FlashAttentionScore,
+                                             PromptFlashAttention)
 from transformers.feature_extraction_utils import BatchFeature
 from transformers.models.qwen2_vl.image_processing_qwen2_vl import (
     smart_resize as image_smart_resize)
@@ -87,7 +88,7 @@ from vllm_mindspore.model_executor.models.qwen3 import (Qwen3ForCausalLM,
                                                         Qwen3Model)
 from vllm_mindspore.model_executor.models.utils import (
     WeightsMapper, _merge_multimodal_embeddings, maybe_prefix)
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
+from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, is_310p
 
 try:
     from ms_custom_ops import apply_rotary_pos_emb_atb
@@ -106,10 +107,28 @@ class Qwen3_VisionAttention(Qwen2_5_VisionAttention):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.flash_attention_score = FlashAttentionScore(
-            head_num=self.num_attention_heads_per_partition,
-            scale_value=1 / math.sqrt(self.hidden_size_per_attention_head),
-            input_layout="TH")
+        self.is_310p = is_310p()
+        if self.is_310p:
+            '''
+            Use 'PromptFlashAttention' specifically for the 310p 
+            to get higher precision.
+            In 310p, 'pre_tokens' and 'next_tokens' only support '2147483647'
+            and 'input_layout' only support 'BSH'.
+            '''
+            self.flash_attention_score = PromptFlashAttention(
+                num_heads=self.num_attention_heads_per_partition,
+                scale_value=1 / math.sqrt(self.hidden_size_per_attention_head),
+                pre_tokens=2147483647,
+                next_tokens=2147483647,
+                input_layout="BSH",
+                num_key_value_heads=self.num_attention_heads_per_partition,
+                sparse_mode=0,
+                inner_precise=0)
+        else:
+            self.flash_attention_score = FlashAttentionScore(
+                head_num=self.num_attention_heads_per_partition,
+                scale_value=1 / math.sqrt(self.hidden_size_per_attention_head),
+                input_layout="TH")
         self.apply_rope = self._custom_ops_rope if is_custom_rope_available \
             else self._native_rope
         #TODO: now the _custom_ops_rope not ready yet,
@@ -155,19 +174,41 @@ class Qwen3_VisionAttention(Qwen2_5_VisionAttention):
         # q/k reshape to TH
         q = q.astype(origin_dtype)
         k = k.astype(origin_dtype)
+        if self.is_310p:
+            batch_size = batch_valid_length.shape[0]
+            max_seq_len = int(batch_valid_length.max())
 
-        _, _, _, context_layer = self.flash_attention_score(
-            q,
-            k,
-            v,
-            None,
-            None,
-            None,
-            None,
-            None,
-            batch_valid_length,
-            q_seq_lens,
-        )
+            range_vector = mint.arange(max_seq_len,
+                                       dtype=batch_valid_length.dtype)
+            mask = range_vector.unsqueeze(0) < batch_valid_length.unsqueeze(1)
+
+            indices = ops.nonzero(mask)
+            target_shape = (batch_size, max_seq_len,
+                            self.num_attention_heads_per_partition *
+                            self.head_dim)
+
+            q_padded = ops.scatter_nd(indices, q, target_shape)
+            k_padded = ops.scatter_nd(indices, k, target_shape)
+            v_padded = ops.scatter_nd(indices, v, target_shape)
+
+            context_layer = self.flash_attention_score(q_padded, k_padded,
+                                                       v_padded, None, None,
+                                                       None, None, None, None,
+                                                       None, None, None)
+            context_layer = ops.gather_nd(context_layer, indices)
+        else:
+            _, _, _, context_layer = self.flash_attention_score(
+                q,
+                k,
+                v,
+                None,
+                None,
+                None,
+                None,
+                None,
+                batch_valid_length,
+                q_seq_lens,
+            )
         output, _ = self.proj(context_layer)
         return output
 
@@ -1632,7 +1673,10 @@ class Qwen3VLForConditionalGeneration(
         block_size = self.cache_config.block_size
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
         head_size = self.model_config.get_head_size()
-        kv_cache_shape = (None, block_size, num_kv_heads, head_size)
+        kv_cache_shape = (None, block_size, num_kv_heads *
+                          head_size) if is_310p() else (None, block_size,
+                                                        num_kv_heads,
+                                                        head_size)
 
         kv_cache_dtype = (self.model_config.dtype
                           if self.cache_config.cache_dtype == "auto" else

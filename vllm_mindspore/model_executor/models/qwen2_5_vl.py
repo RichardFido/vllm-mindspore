@@ -691,13 +691,11 @@ class Qwen2_5_VisionAttention(nn.Cell):
                                      self.head_dim,
                                      self.num_heads,
                                      quant_config=quant_config,
-                                     prefix=f"{prefix}.qkv",
-                                     params_dtype=ms.bfloat16)
+                                     prefix=f"{prefix}.qkv")
         self.proj = RowParallelLinear(input_size=projection_size,
                                       output_size=embed_dim,
                                       quant_config=quant_config,
-                                      prefix=f"{prefix}.proj",
-                                      params_dtype=ms.bfloat16)
+                                      prefix=f"{prefix}.proj")
         self.tensor_model_parallel_all_gather = \
             AllGatherFromModelParallelRegion()
 
