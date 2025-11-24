@@ -83,6 +83,10 @@
     {
       "test_node_id": "st/prefix_caching/test_vllm_native_auto_prefix_cache.py::test_vllm_ms_server_apc_003",
       "card_num": 2
+    },
+    {
+      "test_node_id": "st/models/qwen3_vl/test_vllm_qwen3_vl_8b_v1.py::test_qwen3_vl_8b_v1",
+      "card_num": 2
     }
   ],
   "registered_310p_tests": [
