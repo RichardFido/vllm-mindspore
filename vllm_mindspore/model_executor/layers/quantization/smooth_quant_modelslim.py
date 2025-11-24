@@ -24,6 +24,8 @@ from mindspore.common.initializer import initializer
 from mindspore.ops.auto_generate import (DynamicQuantExt, GroupedMatmul,
                                          GroupedMatmulV4, QuantBatchMatmul)
 from mindspore.ops.operations._infer_ops import QuantV2
+from vllm.model_executor.layers.quantization.base_config import (
+    QuantizationConfig, QuantizeMethodBase)
 
 from vllm_mindspore.model_executor.layers.linear import (
     LinearBase, LinearMethodBase, UnquantizedLinearMethod)
@@ -32,7 +34,6 @@ from vllm_mindspore.utils import is_310p
 from vllm_mindspore.v1.attention import Attention
 
 from .attention import BaseKVCacheMethod, KVCacheInt8Method
-from .base_config import QuantizationConfig, QuantizeMethodBase
 
 
 class SmoothQuantModelSlimConfig(QuantizationConfig):

@@ -20,6 +20,7 @@
 """ utils for load model """
 
 import os
+from contextlib import contextmanager
 
 from mindspore import nn
 from vllm.config import ModelConfig, ModelImpl
@@ -199,3 +200,9 @@ def get_ms_model_architecture(
         raise RecursionError("MindSpore unsupported reward model task now!")
 
     return model_cls, arch
+
+
+@contextmanager
+def ms_device_loading_context(module, target_device):
+    yield module
+    return

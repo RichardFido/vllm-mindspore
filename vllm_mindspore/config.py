@@ -37,7 +37,7 @@ from vllm.config.model import (_STR_DTYPE_TO_TORCH_DTYPE, _find_dtype,
 from vllm.logger import init_logger
 from vllm.utils import random_uuid
 
-from vllm_mindspore.utils import is_310p
+from vllm_mindspore.utils import is_310p, is_native_model_backend
 
 logger = init_logger(__name__)
 
@@ -64,7 +64,8 @@ def vllm_config_post_init(self):
         self.lora_config.verify_with_model_config(self.model_config)
 
     if self.quant_config is None and \
-        self.model_config is not None and self.load_config is not None:
+        self.model_config is not None and self.load_config is not None and \
+            is_native_model_backend():
         self.quant_config = VllmConfig._get_quantization_config(
             self.model_config, self.load_config)
 
