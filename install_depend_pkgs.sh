@@ -76,7 +76,7 @@ get_package_url() {
     local base_url=$(grep -A 1 -w "${package}:" "$CONFIG_FILE" | tail -n 1 | xargs)
     base_url="${base_url}${arch}/"
     
-    if [[ "$package" == "mindspore" ]]; then
+    if [[ "$package" == "mindspore" || "$package" == "ms_custom_ops" ]]; then
         local python_v="cp$(python3 --version 2>&1 | grep -oP 'Python \K\d+\.\d+' | tr -d .)"
         local wheel_url=$(curl -k -s "$base_url" | sed -n 's/.*href="\([^"]*\.whl\)".*/\1/p' | grep -v sha256 | grep "${python_v}-${python_v}" | head -n 1)
     else
@@ -181,12 +181,11 @@ main() {
     
     local vllm_url=$(get_package_url "vllm" "any")
     local mindspore_url=$(get_obs_package_url "mindspore" "2.7.1" "${ARCH}")
-    local msadapter_url=$(get_package_url "msadapter" "any")
+    local msadapter_url=$(get_obs_package_url "msadapter" "0.3.0" "any")
     local mindformers_url=$(get_obs_package_url "mindformers" "1.7.0" "any")
+    local mindone_url=$(get_package_url "mindone" "any")
+    local ms_custom_ops_url=$(get_package_url "ms_custom_ops" "ascend/${ARCH}")
     
-    if [ -z "${vllm_url:-}" ]; then
-        local vllm_url=$(get_package_url "vllm" "any")
-    fi
     if [ -z "${mindspore_url:-}" ]; then
         local mindspore_url=$(get_package_url "mindspore" "unified/${ARCH}")
     fi
@@ -202,6 +201,8 @@ main() {
     log_package_url "MindSpore" "$mindspore_url"
     log_package_url "mindformers" "$mindformers_url"
     log_package_url "msadapter" "$msadapter_url"
+    log_package_url "mindone" "$mindone_url"
+    log_package_url "ms_custom_ops" "$ms_custom_ops_url"
 
     # WARNING: do not adjust sequence of installation steps
     cleanup_package msadapter
@@ -210,6 +211,8 @@ main() {
     pip_install "$mindspore_url"
     pip_install "$mindformers_url"
     pip_install "$msadapter_url"
+    pip_install "$ms_custom_ops_url"
+    pip_install "$mindone_url"
 
     cleanup_cache
 

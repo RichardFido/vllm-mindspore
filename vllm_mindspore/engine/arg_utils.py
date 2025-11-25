@@ -78,12 +78,6 @@ def _set_default_args(self, usage_context: UsageContext,
     # context.
     # Use different default values for different hardware.
 
-    # Try to query the device name on the current platform. If it fails,
-    # it may be because the platform that imports vLLM is not the same
-    # as the platform that vLLM is running on (e.g. the case of scaling
-    # vLLM with Ray) and has no GPUs. In this case we use the default
-    # values for non-H100/H200 GPUs.
-
     # vllm-mindspore: Get device memory will initialize device runtime, which
     # will be inherited by the child process in fork mode, resulting in
     # setting device failure for latter ASCEND_RT_VISIBLE_DEVICES modification.

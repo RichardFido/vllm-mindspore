@@ -239,14 +239,18 @@ vllm.config.ParallelConfig.has_unfinished_dp = has_unfinished_dp
 from .utils import update_modules
 
 ######### for multi-model
-from vllm_mindspore.multimodal.inputs import (as_kwargs, flat_build_elems,
-                                              from_items, MultiModalFieldElem,
-                                              _try_stack)
+from vllm_mindspore.multimodal.inputs import (as_kwargs, batched_reduce_data,
+                                              flat_build_elems,
+                                              flat_reduce_data, from_items,
+                                              MultiModalFieldElem, _try_stack)
 
+from vllm.multimodal.inputs import MultiModalBatchedField
 from vllm.multimodal.inputs import MultiModalFlatField
 from vllm.multimodal.inputs import MultiModalKwargs
 
+MultiModalBatchedField._reduce_data = batched_reduce_data
 MultiModalFlatField.build_elems = flat_build_elems
+MultiModalFlatField._reduce_data = flat_reduce_data
 MultiModalKwargs.as_kwargs = as_kwargs
 MultiModalKwargs.from_items = from_items
 MultiModalKwargs._try_stack = _try_stack

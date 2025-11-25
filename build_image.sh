@@ -154,6 +154,9 @@ RUN cd /workspace/vllm_mindspore && \\
     pip install . && \\
     git config --global http.sslVerify true
 
+RUN set -ex && \\
+    pip3 install opencv-python-headless==4.7.0.72
+
 WORKDIR /workspace
 
 CMD ["bash"]
