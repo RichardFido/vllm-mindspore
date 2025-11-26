@@ -14,9 +14,17 @@ Qwen2.5-7B-Instruct:
   description: "Qwen2.5-7B, HF default configuration, source from https://huggingface.co/Qwen/Qwen2.5-7B-Instruct"
   archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct"
 
+Qwen2.5-32B-Instruct:
+  description: "Qwen2.5-32B, HF default configuration, source from https://huggingface.co/Qwen/Qwen2.5-32B-Instruct"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen2.5-32B-Instruct"
+
 Qwen2.5-7B-Lora-Law:
   description: "Qwen2.5-7B-Lora-Law, HF default configuration, source from https://huggingface.co/qingpingwan/Qwen2.5-7B-Lora-Law"
   archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen2.5-7B-Lora-Law"
+
+Qwen2.5-7B-Lora-Medical:
+  description: "Qwen2.5-7B-Lora-Medical, HF default configuration, source from https://www.modelscope.cn/models/qghrwzyy/Qwen2.5-7B-lora/summary"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen2.5-7B-Lora-Medical"
 
 Qwen2.5-VL-7B-Instruct:
   description: "Qwen2.5-VL-7B-Instruct, HF default configuration, source from https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct"
