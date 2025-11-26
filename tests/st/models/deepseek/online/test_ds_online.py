@@ -28,7 +28,9 @@ import time
 
 from tests.utils.env_var_manager import EnvVarManager
 from tests.utils.common_utils import (teardown_function, setup_function,
-                                      MODEL_PATH)
+                                      MODEL_PATH, start_vllm_server,
+                                      get_key_counter_from_log,
+                                      stop_vllm_server, logger)
 
 env_manager = EnvVarManager()
 env_manager.setup_mindformers_environment()
@@ -48,112 +50,7 @@ env_vars = {
 DS_R1_W8A8_MODEL = MODEL_PATH["DeepSeek-R1-W8A8"]
 
 
-def execute_shell_command(command):
-    """执行 shell 命令并返回状态和输出"""
-    from vllm.logger import init_logger
-    logger = init_logger(__name__)
-    status, output = subprocess.getstatusoutput(command)
-    if status != 0:
-        logger.info("执行命令失败: %s\n错误信息: %s", command, output)
-    return status, output
-
-
-def stop_vllm_server(process=None):
-    """停止 vLLM 服务及其相关进程"""
-    from vllm.logger import init_logger
-    logger = init_logger(__name__)
-    if process is not None:
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-            process.wait()
-        except Exception as e:
-            logger.info("终止进程组失败: %s", e)
-
-    commands = [
-        "npu-smi info | grep python3 | awk '{print $5}'",
-        "npu-smi info | grep vllm-mindspore | awk '{print $5}'",
-        "ps -ef | grep vllm-mindspore | grep -v grep | awk '{print $2}'",
-        "ps -ef | grep scheduler_init.py | grep -v grep | awk '{print $2}'",
-        "ps -ef | grep -E '(python3|python)' | grep entrypoint | grep -v grep "
-        "| awk '{print $2}'",
-        "ps -ef | grep -E '(python3|python)' | grep 'from multiprocessing.' "
-        "| grep -v grep | awk '{print $2}'"
-    ]
-
-    for cmd in commands:
-        status, output = execute_shell_command(cmd)
-        if status == 0 and output.strip():
-            kill_cmd = f"kill -9 {output.strip()}"
-            execute_shell_command(kill_cmd)
-
-    execute_shell_command("ray stop")
-    time.sleep(10)
-
-
-def get_key_counter_from_log(log_name, key):
-    dirname, _ = os.path.split(os.path.abspath(__file__))
-    log_path = os.path.join(dirname, log_name)
-    if "'" in key:
-        cmd = f"cat {log_path}|grep \"{key}\"|wc -l"
-    else:
-        cmd = f"cat {log_path}|grep '{key}'|wc -l"
-    _, result = subprocess.getstatusoutput(cmd)
-    return int(result)
-
-
-def start_vllm_server(model, log_name, extra_params=''):
-    """
-    启动vllm服务函数
-    Args:
-        model: 请求中的model名称
-        log_name: 服务拉起日志文件名称
-        extra_params: 额外启动参数
-    Returns:
-        process: 拉起服务的进程号
-    """
-    from vllm.logger import init_logger
-    logger = init_logger(__name__)
-    dirname, _ = os.path.split(os.path.abspath(__file__))
-    log_path = os.path.join(dirname, log_name)
-    start_cmd = f"vllm-mindspore serve {model}"
-    cmd = f"{start_cmd} " + \
-          f"{extra_params} > {log_path} 2>&1"
-    logger.info(cmd)
-    process = subprocess.Popen(cmd,
-                               shell=True,
-                               executable='/bin/bash',
-                               stdout=None,
-                               stderr=None,
-                               preexec_fn=os.setsid)
-
-    time.sleep(10)
-    count = 0
-    cycle_time = 50
-    while count < cycle_time:
-        result = get_key_counter_from_log(log_name,
-                                          "Application startup complete")
-        if result > 0:
-            break
-        result = get_key_counter_from_log(log_name, "ERROR")
-        if result > 0:
-            stop_vllm_server()
-            with open(log_path) as f:
-                err_log = f.read()
-            raise RuntimeError("vllm server fails to start!" + str(err_log))
-            break
-        time.sleep(10)
-        count += 1
-    else:
-        stop_vllm_server()
-        with open(log_path) as f:
-            err_log = f.read()
-        raise RuntimeError("vllm server fails to start!" + str(err_log))
-    return process
-
-
 def set_request(model_path, master_ip="127.0.0.1", port="8000"):
-    from vllm.logger import init_logger
-    logger = init_logger(__name__)
     url = f"http://{master_ip}:{port}/v1/completions"
     headers = {"Content-Type": "application/json"}
     data = {
@@ -237,9 +134,12 @@ def test_deepseek_r1_dp4_tp2_ep4_online():
                     f"--enable-expert-parallel "\
                     f"--additional-config '{{\"expert_parallel\": 4}}'"
 
-    process = start_vllm_server(model, log_name, extra_params=server_params)
-
+    process = start_vllm_server(model,
+                                log_name,
+                                start_mode='serve',
+                                extra_params=server_params)
     set_request(model, master_ip=dp_master_ip, port=server_port)
+
     stop_vllm_server(process)
     if os.path.exists(log_path):
         os.remove(log_path)

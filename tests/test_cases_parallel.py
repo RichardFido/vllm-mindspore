@@ -104,6 +104,7 @@ def tasks_resource_alloc(tasks: list[tuple[int]]) -> list[tuple[str]]:
     device_base = 0
     lccl_base_port = 20068
     hccl_base_port = 51000
+    base_port = 8000
 
     out_tasks: list[tuple[str]] = []
     for task in tasks:
@@ -121,12 +122,14 @@ def tasks_resource_alloc(tasks: list[tuple[int]]) -> list[tuple[str]]:
         commands = [
             f"export ASCEND_RT_VISIBLE_DEVICES={device_str}",
             f"export LCAL_COMM_ID={lccl_str}",
-            f"export HCCL_IF_BASE_PORT={hccl_base_port}"
+            f"export HCCL_IF_BASE_PORT={hccl_base_port}",
+            f"export TEST_SERVE_PORT={base_port}"
         ]
 
         device_base += resource_req
         lccl_base_port += resource_req
         hccl_base_port += resource_req
+        base_port += resource_req
 
         commands.append(f"pytest -s -v {task_case} > {log_file}")
         out_tasks.append((" && ".join(commands), log_file))
