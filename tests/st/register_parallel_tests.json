@@ -59,6 +59,18 @@
     {
       "test_node_id": "st/distributed/test_shm_broadcast.py::test_shm_broadcast",
       "card_num": 4
+    },
+    {
+      "test_node_id": "st/chunk_prefill/test_vllm_native_chunk_prefill.py::test_vllm_ms_server_chunked_prefill_001",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "st/chunk_prefill/test_vllm_native_chunk_prefill.py::test_vllm_ms_server_chunked_prefill_003",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "st/chunk_prefill/test_vllm_native_chunk_prefill.py::test_vllm_ms_server_chunked_prefill_005",
+      "card_num": 2
     }
   ],
   "registered_310p_tests": [
