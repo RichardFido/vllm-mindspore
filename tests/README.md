@@ -28,38 +28,36 @@ vLLM-MindSpore插件将MindSpore大模型接入vLLM，继承vLLM服务化部署�
 ```
 tests 
    ├── __init__.py
-   ├── ut/                           - Unit Test 单元测试用例目录；
-   |   ├── ops/                      - 自定义算子用例；
-   |   ├── samplers/                 - 采样器相关单元测试；
-   |   └── ...             
-   ├── st/                           - System Test 系统测试用例目录。
-   |   ├── models/                   - 在线模型相关用例；
-   |   |  ├── deepseek/              - DeepSeek在线模型相关用例；
-   |   |  |   ├── offline/           - 离线服务化用例
-   |   |  |   |   └── test_ds_xx     - DeepSeek简层门禁用例；
-   |   |  |   └── online/            - 在线服务化用例  
-   |   |  |       ├── test_ds_xx     - DeepSeek简层门禁用例；
-   |   |  |       ├── pref_test/     - DeepSeek整网性能用例（含量化）；
-   |   |  |       ├── acc_test/      - DeepSeek整网数据集精度用例（含量化）；
-   |   |  |       └── endur_test/    - DeepSeek整网长稳用例；
-   |   |  ├── qwen3/                 - Qwen3在线模型相关用例；
+   ├── ut/                                 - Unit Test 单元测试用例目录；
+   |   ├── ops/                            - 自定义算子用例；
+   |   ├── samplers/                       - 采样器相关单元测试；
+   |   ├── ...
+   |   └── register_parallel_tests.json    - Unit Test 多实例并发执行注册列表            
+   ├── st/                                 - System Test 系统测试用例目录。
+   |   ├── models/                         - 在线模型相关用例；
+   |   |  ├── deepseek/                    - DeepSeek在线模型相关用例；
+   |   |  |   ├── offline/                 - 离线服务化用例
+   |   |  |   |   └── test_ds_xx           - DeepSeek简层门禁用例；
+   |   |  |   └── online/                  - 在线服务化用例  
+   |   |  |       ├── test_ds_xx           - DeepSeek简层门禁用例；
+   |   |  |       ├── pref_test/           - DeepSeek整网性能用例（含量化）；
+   |   |  |       ├── acc_test/            - DeepSeek整网数据集精度用例（含量化）；
+   |   |  |       └── endur_test/          - DeepSeek整网长稳用例；
+   |   |  ├── qwen3/                       - Qwen3在线模型相关用例；
    |   |  └── ... 
-   |   ├── lora/                     - multilora特性离线相关用例；
-   |   ├── quantization/             - 量化特性离线相关用例；
-   |   ├── ep/                       - EP在线模型相关用例；
-   |   |   ├── offline/              - 离线服务化用例
-   |   |   └── online/               - 在线服务化用例  
-   |   └── ...
+   |   ├── lora/                           - multilora特性离线相关用例；
+   |   ├── quantization/                   - 量化特性离线相关用例；
+   |   ├── ep/                             - EP在线模型相关用例；
+   |   |   ├── offline/                    - 离线服务化用例
+   |   |   └── online/                     - 在线服务化用例  
+   |   ├── ...
+   |   └── register_parallel_tests.json    - System Test 多实例并发执行注册列表
    ├── utils                         
    |   ├── common_utils.py           - 通用模块定义
    |   ├── model_info.yaml           - 模型权重注册列表
    |   └── env_var_manager.py        - 环境变量相关模块定义
-   ├── serve_utils.py                - 在线服务化部署相关通用模块定义
-   ├── register_parallel_tests.json  - 多实例并发执行注册列表
    └── test_cases_parallel.py        - 用于在线生成多实例并发执行用例组
 ```
-
-**注意:** 当前由于门禁工程约束，暂时用例都放在 /tests/st/python 目录下，按特性/模块划分，待工程支持ut目录后参考上述目录结构执行。
 
 ## 2.2 用例常用配置
 
@@ -79,8 +77,8 @@ tests
 ```
 ...test_{test_file_name}.py                       # 测试用例文件以"test_"前缀开头，尽量体现测试模块内容。文件内支持同时实现单卡/多卡等多个用例。
 
-from tests.st.python.utils.common_utils import (teardown_function,     # [必选]pytest执行测试用例完成后会自动调用，主要用于清除服务化进程残留和释放资源
-                                                setup_function)        # [必选]pytest执行测试用例前会自动调用，主要指定device卡和通信端口号
+from tests.utils.common_utils import (teardown_function,     # [必选]pytest执行测试用例完成后会自动调用，主要用于清除服务化进程残留和释放资源
+                                      setup_function)        # [必选]pytest执行测试用例前会自动调用，主要指定device卡和通信端口号
 
 
 @patch.dict(os.environ, env_vars)                 # [可选]env_vars为自定义环境变量列表，如有可配置
@@ -168,7 +166,7 @@ def test_qwen3_8B_online():
     run_vllm_qwen3_8b()
 ```
 
- **Step2:** 注册并行配置，位于文件路经 tests/st/python/register_parallel_tests.json，在对应的平台模块中注册。当前支持`registered_910b_tests`和`registered_310p_tests`。
+ **Step2:** 注册并行配置，位于文件路经 tests/(st | ut)/register_parallel_tests.json，在对应的平台模块中注册。当前支持`registered_910b_tests`和`registered_310p_tests`。
 
 ```
 注册模板:
@@ -183,23 +181,37 @@ def test_qwen3_8B_online():
 1. `test_file_path` 应填写相对路经
 2. `test_function_name` 对应的测试用例需要通过`@pytest.mark.{level_marks}`提前指定执行级别
 
-注册示例如下:
+Unit Test 注册示例如下:
 
 ```
 {
   "registered_910b_tests": [
     {
-      "test_node_id": "models/qwen2_5_vl/test_vllm_qwen2_5_vl_7b_v1.py::test_qwen2_5_vl_7b_v1",
+      "test_node_id": "ut/sampling/test_vllm_sampling.py::tst_vllm_sampling_n_logprobs",
+      "card_num": 2
+    }
+  ],
+  "registered_310p_tests": []
+}
+```
+
+System Test 注册示例如下:
+
+```
+{
+  "registered_910b_tests": [
+    {
+      "test_node_id": "st/models/qwen2_5_vl/test_vllm_qwen2_5_vl_7b_v1.py::test_qwen2_5_vl_7b_v1",
       "card_num": 2
     },
     {
-      "test_node_id": "distributed/test_shm_broadcast.py::test_shm_broadcast",
+      "test_node_id": "st/distributed/test_shm_broadcast.py::test_shm_broadcast",
       "card_num": 4
     }
   ],
   "registered_310p_tests": [
     {
-      "test_node_id": "models/qwen3/test_vllm_mf_qwen3_8b.py::test_mf_qwen3_v1_310p",
+      "test_node_id": "st/models/qwen3/test_vllm_mf_qwen3_8b.py::test_mf_qwen3_v1_310p",
       "card_num": 2
     }
   ]
@@ -215,7 +227,7 @@ def test_qwen3_8B_online():
 ### 3.5.1 权重上传
 门禁使用的权重归档在特定服务器上，如果你的用例涉及新模型的权重，请通过PR或Issues联系Maintainer协助上传，您需要提供模型的开源权重下载连接。
 
-同时在tests/st/python/utils/model_info.yaml中注册, 新增权重必须说明开源权重下载路经以及修改点。
+同时在tests/utils/model_info.yaml中注册, 新增权重必须说明开源权重下载路经以及修改点。
 
 ```
 # 注册模板
@@ -231,11 +243,11 @@ Llama-3.1-8B-Instruct:
 ```
 
 ### 3.5.2 权重管理与使用
-门禁环境现有权重可以在tests/st/python/utils/model_info.yaml查看已注册列表，如果已有相关模型权重可复用。
+门禁环境现有权重可以在tests/utils/model_info.yaml查看已注册列表，如果已有相关模型权重可复用。
 调用方式:
 
 ```
-from tests.st.python.utils.common_utils import MODEL_PATH
+from tests.utils.common_utils import MODEL_PATH
 
 model_path = MODEL_PATH[{model_name}]
 ```
