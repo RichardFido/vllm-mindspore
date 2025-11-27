@@ -46,7 +46,10 @@ def env_setup(target_env_dict=None):
             # default is 15s, change to 180s
             # to avoid multi node timeout when starting service.
             "MS_NODE_TIMEOUT": "180",
-            "MS_ALLOC_CONF": "enable_vmm:true"
+            # aclgraph current support capture 19 graphs as
+            # the total subgraph number is 2000
+            "MS_DEV_RUNTIME_CONF": "graph_capture_max_number:19",
+            "MS_ALLOC_CONF": "enable_vmm: true, derag_memory_step_freq: -1"
         }
 
     for key, value in target_env_dict.items():
