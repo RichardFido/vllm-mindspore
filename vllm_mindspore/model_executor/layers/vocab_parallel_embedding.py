@@ -36,6 +36,7 @@ from vllm_mindspore.distributed.communication_op import (
     ReduceFromModelParallelRegion)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
+from vllm_mindspore.utils import is_310p, set_weight_format_to_nz
 
 DEFAULT_VOCAB_PADDING_SIZE = 64
 
@@ -73,6 +74,10 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
 
     def embedding(self, layer: nn.Cell, input_: Tensor) -> Tensor:
         return mint.index_select(layer.weight, 0, input_)
+
+    def process_weights_after_loading(self, layer):
+        if isinstance(layer, ParallelLMHead) and is_310p():
+            set_weight_format_to_nz(layer.weight)
 
 
 def get_masked_input_and_mask(

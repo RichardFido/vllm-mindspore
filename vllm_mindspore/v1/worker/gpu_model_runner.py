@@ -462,13 +462,11 @@ def _allocate_nz_kv_cache_tensors(self, kv_cache_config):
         if not isinstance(kv_cache_spec, FullAttentionSpec):
             raise NotImplementedError
 
-        attn_backend = self.attn_backends[group_idx]
         target_dtype = get_valid_dtype(kv_cache_spec.dtype)
 
         num_blocks = kv_cache_tensor.size // kv_cache_spec.page_size_bytes
-        kv_cache_shape = attn_backend.get_kv_cache_shape(
-            num_blocks, kv_cache_spec.block_size, kv_cache_spec.num_kv_heads,
-            kv_cache_spec.head_size)
+        kv_cache_shape = (num_blocks, kv_cache_spec.block_size,
+                          kv_cache_spec.num_kv_heads, kv_cache_spec.head_size)
 
         reshaped_layer_tensors = []
         coef = 1 if isinstance(kv_cache_spec,
@@ -476,7 +474,7 @@ def _allocate_nz_kv_cache_tensors(self, kv_cache_config):
                                 MLAQuantFullAttentionSpec)) else 2
         for _ in range(coef):
             reshaped_layer_tensors.append(
-                create_kv_cache(kv_cache_shape[1:], target_dtype))
+                create_kv_cache(kv_cache_shape, target_dtype))
 
         final_kv_tuple = mutable(tuple(reshaped_layer_tensors))
         for layer_name in kv_cache_tensor.shared_by:

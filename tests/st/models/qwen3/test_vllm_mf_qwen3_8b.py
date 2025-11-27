@@ -37,7 +37,7 @@ env_vars = {
 }
 
 
-def run_mf_qwen3_networt():
+def run_mf_qwen3_network():
     """Run qwen3 network and check result."""
     # isort: off
     import vllm_mindspore
@@ -74,14 +74,4 @@ def run_mf_qwen3_networt():
 @pytest.mark.level0
 def test_mf_qwen3_v1():
     """Test qwen3 8B using V0 LLMEngine."""
-    run_mf_qwen3_networt()
-
-
-@patch.dict(os.environ, {
-    **env_vars, "VLLM_USE_V1": "1",
-    "MS_ENABLE_INTERNAL_BOOST": "off"
-})
-@pytest.mark.level0
-def test_mf_qwen3_v1_310p():
-    """Test qwen3 8B using V1 LLMEngine in 310p."""
-    pass
+    run_mf_qwen3_network()
