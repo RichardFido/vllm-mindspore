@@ -390,6 +390,12 @@ import vllm.v1.sample.sampler
 
 vllm.v1.sample.sampler.Sampler.apply_temperature = apply_temperature
 
+from vllm_mindspore.v1.sample.logits_processor.builtin import update_state
+import vllm.v1.sample.logits_processor.builtin
+from vllm.v1.sample.logits_processor.builtin import MinPLogitsProcessor
+
+MinPLogitsProcessor.update_state = update_state
+
 from vllm_mindspore.distributed.shm_broadcast import initialize_ShmRingBuffer
 from vllm.distributed.device_communicators.shm_broadcast import ShmRingBuffer
 
