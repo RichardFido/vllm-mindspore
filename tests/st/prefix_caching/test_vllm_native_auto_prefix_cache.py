@@ -96,7 +96,6 @@ def test_vllm_ms_server_apc_003():
     """
     log_name = "test_vllm_ms_server_apc_003.log"
     model = QWEN_7B_MODEL
-    stop_vllm_server()
     process = start_vllm_server(
         model,
         log_name,

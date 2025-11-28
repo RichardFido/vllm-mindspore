@@ -85,6 +85,18 @@
       "card_num": 2
     },
     {
+      "test_node_id": "st/chunk_prefill/test_vllm_mf_chunk_prefill.py::test_vllm_mf_offline_chunked_prefill_004",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "st/chunk_prefill/test_vllm_mf_chunk_prefill.py::test_vllm_mf_server_chunked_prefill_004",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "st/chunk_prefill/test_vllm_mf_chunk_prefill.py::test_vllm_mf_server_chunked_prefill_005",
+      "card_num": 2
+    },
+    {
       "test_node_id": "st/lora/test_multilora_inference.py::test_vllm_ms_server_multilora_007",
       "card_num": 2
     },
@@ -94,6 +106,10 @@
     },
     {
       "test_node_id": "st/prefix_caching/test_vllm_native_auto_prefix_cache.py::test_vllm_ms_server_apc_003",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "st/prefix_caching/test_vllm_mf_auto_prefix_cache.py::test_vllm_mf_server_apc_007",
       "card_num": 2
     },
     {

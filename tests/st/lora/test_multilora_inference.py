@@ -23,6 +23,7 @@ import json
 import time
 import requests
 import pytest
+import sys
 from unittest.mock import patch
 import vllm_mindspore
 from vllm import LLM, SamplingParams
@@ -50,7 +51,6 @@ env_vars = {
 }
 
 QWEN_7B_MODEL = MODEL_PATH["Qwen2.5-7B-Instruct"]
-QWEN_32B_MODEL = MODEL_PATH["Qwen2.5-32B-Instruct"]
 QWEN_7B_LORA_LAW = MODEL_PATH["Qwen2.5-7B-Lora-Law"]
 QWEN_7B_LORA_MEDICAL = MODEL_PATH["Qwen2.5-7B-Lora-Medical"]
 
@@ -220,6 +220,63 @@ def test_vllm_ms_offline_multilora_004():
         prompt = output.prompt
         assert prompt == prompts[i]
         assert output.finished is True
+
+
+@pytest.mark.level1
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_onecard
+@patch.dict(os.environ, env_vars)
+def test_vllm_ms_offline_multilora_005():
+    """
+    Test Summary:
+        离线ms场景qwen模型默认架构启动,
+        设置enable-lora, LoRARequest传入错误的lora_path
+    Expected Result:
+        报错合理
+    Model Info:
+        Qwen2.5-7B-Instruct
+    """
+    log_name = "test_vllm_ms_offline_multilora_005.log"
+    parent_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    log_path = os.path.join(parent_dir, "utils", log_name)
+
+    model = QWEN_7B_MODEL
+    prompts = ["Hello,", "你好,"]
+    lora_path = "/path/to/error/lora"
+    sampling_params = SamplingParams(temperature=0.0,
+                                     top_p=0.95,
+                                     top_k=3,
+                                     repetition_penalty=2.0)
+
+    with open(log_path, "w") as f:
+        original_stdout = os.dup(1)
+        original_stderr = os.dup(2)
+        os.dup2(f.fileno(), 1)
+        os.dup2(f.fileno(), 2)
+
+        try:
+            llm = LLM(model=model,
+                      max_lora_rank=64,
+                      max_loras=1,
+                      enable_lora=True,
+                      max_model_len=1024,
+                      max_num_batched_tokens=1024,
+                      tensor_parallel_size=1)
+
+            llm.generate(prompts,
+                         sampling_params,
+                         lora_request=LoRARequest("lora1", 1, lora_path))
+        except Exception as e:
+            f.write(str(e) + "\n")
+        finally:
+            os.dup2(original_stdout, 1)
+            os.dup2(original_stderr, 2)
+            os.close(original_stdout)
+            os.close(original_stderr)
+    result = get_key_counter_from_log(
+        log_name, "No adapter found for /path/to/error/lora")
+    assert result >= 1
 
 
 @pytest.mark.level0
