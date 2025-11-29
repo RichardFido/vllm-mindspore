@@ -281,6 +281,14 @@ update_modules("vllm.v1.attention.backends.flash_attn", ms_attn)
 
 import vllm.v1.worker.gpu_model_runner
 
+from vllm_mindspore.v1.worker.gpu_model_runner import gpu_model_runner_init
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.__init__ = gpu_model_runner_init
+
+from vllm_mindspore.v1.worker.gpu_model_runner import _to_list
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._to_list = _to_list
+
 from vllm_mindspore.v1.worker.gpu_model_runner import _prepare_inputs
 
 vllm.v1.worker.gpu_model_runner.GPUModelRunner._prepare_inputs = _prepare_inputs
