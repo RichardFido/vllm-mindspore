@@ -106,8 +106,19 @@ def cleanup_subprocesses(pid=None) -> None:
         try:
             os.killpg(child.pid, signal.SIGKILL)
         except ProcessLookupError:
-            with contextlib.suppress(ProcessLookupError):
-                child.kill()
+            try:
+                with contextlib.suppress(psutil.NoSuchProcess,
+                                         ProcessLookupError):
+                    child.kill()
+            except Exception as err:
+                result = subprocess.run(['ps axf'],
+                                        capture_output=True,
+                                        text=True,
+                                        check=True)
+                logger.error(
+                    "Process cleanup failed, current process tree is as "
+                    "follows: %s", result.stdout)
+                raise err
 
     start_time = time.time()
     time_out = 10
@@ -134,15 +145,6 @@ def stop_vllm_server(process=None):
 def teardown_function():
     """pytest will call the teardown_function after case function completed."""
     cleanup_subprocesses()
-
-
-def save_output(outputs):
-    """Used to aggregate request outputs log into vllm_output.log."""
-    dirname, _ = os.path.split(os.path.abspath(__file__))
-    log_path = os.path.join(dirname, "vllm_output.log")
-    with open(log_path, 'a') as file:
-        for out in outputs:
-            file.write(str(out) + "\n")
 
 
 def get_key_counter_from_log(log_name, key):
@@ -494,15 +496,12 @@ def process_request(model,
                 "Abnormal Request: %s, %s\nbatch: %s, concurrency: %s, "
                 "data: %s", r.status_code, r.text, batch, concurrency,
                 str(data)[:10])
-            save_output([r.status_code, r.text])
             result.append(r.status_code)
     result = list(set(result))
     max_output_len = 5  # TODO
     if prompt_list:
         max_output_len = max(5, len(prompt_list) + 3)
     if len(result) > max_output_len:
-        save_output(
-            ["The output results have excessive discrepancies.", result])
         logger.info(
             "The output results have excessive discrepancies, "
             "with a length of %s! The data is truncated, and "
@@ -1011,6 +1010,7 @@ def run_ac_coverage_test(is_service, model, url, llm, batches,
         result_comb = run_inference_test(is_service, model, url, llm,
                                          *combination)
         process_results[combination] = result_comb
+    return process_results
 
 
 def run_mixed_test(is_service, model, url, llm, seq_lengths, model_max_token,
@@ -1058,7 +1058,6 @@ def run_anomaly_detection_test(is_service, model, url, llm, model_max_token):
                                         seq_length=exceed_seq_length)
 
         exceed_results[f"exceed_result seq{exceed_seq_length}"] = exceed_result
-        save_output([exceed_results])
         assert exceed_result[0] == 400, exceed_result[0]
     else:
         try:
@@ -1072,7 +1071,6 @@ def run_anomaly_detection_test(is_service, model, url, llm, model_max_token):
         else:
             exceed_results[
                 f"exceed_result seq{exceed_seq_length}"] = exceed_result
-            save_output([exceed_results])
             assert exceed_result[0] == "Inference result is empty."
             logger.info(exceed_result)
 
@@ -1165,8 +1163,6 @@ def run_combination_accuracy(model=None,
                                             random_post_params)
         process_results.update(mixed_test_results)
 
-    save_output([process_results])
-
     # Part 3: Anomaly Detection
     logger.info("Part3: Anomaly Detection - Intercept requests when "
                 "the input exceeds the model's model_max_token")
@@ -1195,11 +1191,6 @@ def run_combination_accuracy(model=None,
                     "failed: duplicate degree %s, garbled degree "
                     "%s.\nText content: %s", key, str(duplicate_degree),
                     str(garbled_degree), content)
-                save_output([
-                    "duplicate degree and garbled degree check failed:",
-                    "duplicate degree: " + str(duplicate_degree),
-                    "garbled degree: " + str(garbled_degree), content
-                ])
                 break
         if err_flag:
             test_results["failure"] += 1
@@ -1209,5 +1200,25 @@ def run_combination_accuracy(model=None,
         test_results["success"] += 1
         test_results["all_cases"].append({key: value})
 
-    save_output([test_results])
     return test_results
+
+
+def check_hit(log_name):
+    """Check whether the prefix cache is hit"""
+    dirname, _ = os.path.split(os.path.abspath(__file__))
+    log_path = os.path.join(dirname, log_name)
+    is_hit = False
+    rates = []
+    with open(log_path) as f:
+        log_lines = f.readlines()
+    for line in log_lines:
+        match = re.search(r'Prefix cache hit rate: (GPU: ){0,1}(\d+\.\d{1,})%',
+                          line)
+        if match:
+            rates.append(float(match.group(2)))
+    if rates:
+        if rates[-1] > 0:
+            is_hit = True
+    else:
+        raise ValueError("No prefix cache matched!")
+    return is_hit

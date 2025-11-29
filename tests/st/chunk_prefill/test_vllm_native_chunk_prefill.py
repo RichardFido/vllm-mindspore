@@ -23,7 +23,7 @@ from vllm import LLM, SamplingParams
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH, logger, start_vllm_server,
                                       get_key_counter_from_log,
-                                      stop_vllm_server, save_output,
+                                      stop_vllm_server,
                                       run_combination_accuracy)
 
 # def env
@@ -38,7 +38,7 @@ env_vars = {
 QWEN_7B_MODEL = MODEL_PATH["Qwen2.5-7B-Instruct"]
 
 
-@pytest.mark.level0
+@pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
 @patch.dict(os.environ, env_vars)
@@ -69,7 +69,6 @@ def test_vllm_ms_offline_chunked_prefill_001():
     logger.info(outputs)
     for output in outputs:
         prompt = output.prompt
-        save_output(["test_vllm_ms_offline_chunked_prefill_001", output])
         assert prompt == prompts
         assert output.finished is True
 
@@ -97,7 +96,6 @@ def test_vllm_ms_offline_chunked_prefill_003():
     logger.info(outputs)
     for output in outputs:
         prompt = output.prompt
-        save_output(["test_vllm_ms_offline_chunked_prefill_003", output])
         assert prompt in prompts
         assert output.finished is True
 
@@ -130,7 +128,7 @@ def test_vllm_ms_offline_chunked_prefill_004():
     assert test_results.get('failure') == 0
 
 
-@pytest.mark.level0
+@pytest.mark.level1
 @patch.dict(os.environ, env_vars)
 def test_vllm_ms_server_chunked_prefill_001():
     """
@@ -168,9 +166,6 @@ def test_vllm_ms_server_chunked_prefill_001():
                              headers={'Content-Type': 'application/json'})
     logger.info(response.json())
     stop_vllm_server(process)
-    save_output(
-        ["test_vllm_ms_server_chunked_prefill_001",
-         str(response.json())])
     assert response.status_code == 200
     result = get_key_counter_from_log(log_name,
                                       "Run with native model backend")
@@ -217,9 +212,6 @@ def test_vllm_ms_server_chunked_prefill_002():
                              headers={'Content-Type': 'application/json'})
     logger.info(response.json())
     stop_vllm_server(process)
-    save_output(
-        ["test_vllm_ms_server_chunked_prefill_002",
-         str(response.json())])
     assert response.status_code == 200
     result = get_key_counter_from_log(log_name,
                                       "Run with native model backend")
@@ -274,9 +266,6 @@ def test_vllm_ms_server_chunked_prefill_003():
                              headers={'Content-Type': 'application/json'})
     logger.info(response.json())
     stop_vllm_server(process)
-    save_output(
-        ["test_vllm_ms_server_chunked_prefill_003",
-         str(response.json())])
     assert response.status_code == 200
     result = get_key_counter_from_log(log_name,
                                       "Run with native model backend")
@@ -336,9 +325,6 @@ def test_vllm_ms_server_chunked_prefill_004():
                              headers={'Content-Type': 'application/json'})
     logger.info(response.json())
     stop_vllm_server(process)
-    save_output(
-        ["test_vllm_ms_server_chunked_prefill_004",
-         str(response.json())])
     assert response.status_code == 200
     result = get_key_counter_from_log(log_name,
                                       "Run with native model backend")
