@@ -30,7 +30,7 @@ from mindspore import Generator as msGenerator
 from mindspore import Tensor, mint, mutable
 from typing_extensions import TypeAlias
 from vllm.attention import AttentionType
-from vllm.config import (CompilationLevel, CUDAGraphMode,
+from vllm.config import (CompilationLevel, CUDAGraphMode, VllmConfig,
                          get_layers_from_vllm_config)
 from vllm.distributed.parallel_state import get_pp_group
 from vllm.forward_context import set_forward_context
@@ -70,6 +70,38 @@ AttnMetadataDict: TypeAlias = dict[str, AttentionMetadata]
 # list when ubatching is enabled
 PerLayerAttnMetadata: TypeAlias = Union[list[AttnMetadataDict],
                                         AttnMetadataDict]
+
+
+class FakeStream:
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+_original_init = GPUModelRunner.__init__
+
+
+# Prevent excessive event creation caused by multi-stream initialization.
+# We use a FakeStream to bypass the stream creation in the original `__init__`.
+# TODO: Remove this patch when the issue is resolved.
+def gpu_model_runner_init(
+    self,
+    vllm_config: VllmConfig,
+    device: torch.device,
+):
+    real_stream = torch.cuda.Stream
+    try:
+        torch.cuda.Stream = FakeStream
+        _original_init(self, vllm_config, device)
+    finally:
+        torch.cuda.Stream = real_stream
+
+
+def _to_list(self, sampled_token_ids: torch.Tensor) -> list[list[int]]:
+    """
+    Directly return tolist() to avoid create synchronous event
+    """
+    return sampled_token_ids.tolist()
 
 
 def _prepare_inputs(
