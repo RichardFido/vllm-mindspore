@@ -33,8 +33,7 @@ from typing import Any, Optional
 import mindspore as ms
 import mindspore.mint.nn.functional as F
 import numpy as np
-from mindspore import Parameter, Tensor, mint, mutable, nn, ops
-from mindspore.common import dtype as mstype
+from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore.ops.operations.nn_ops import (FlashAttentionScore,
                                              PromptFlashAttention)
 from transformers.feature_extraction_utils import BatchFeature
@@ -73,7 +72,7 @@ from vllm_mindspore.model_executor.layers.rotary_embedding import (
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
-    default_weight_loader)
+    default_weight_loader, get_loaded_weight)
 from vllm_mindspore.model_executor.models.attention_mask import (
     MultiModalLowerTriangularMask)
 from vllm_mindspore.model_executor.models.interfaces import (
@@ -89,7 +88,7 @@ from vllm_mindspore.model_executor.models.qwen3 import (Qwen3ForCausalLM,
                                                         Qwen3Model)
 from vllm_mindspore.model_executor.models.utils import (
     WeightsMapper, _merge_multimodal_embeddings, maybe_prefix)
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, is_310p
+from vllm_mindspore.utils import is_310p
 
 try:
     from ms_custom_ops import apply_rotary_pos_emb_atb
@@ -508,7 +507,7 @@ class Qwen3_VisionTransformer(nn.Cell):
                 param = params_dict[name]
                 # Conv3d -> nn.Dense needs to flatten the weight
                 if "patch_embed.proj.weight" in name:
-                    loaded_weight = loaded_weight[:]
+                    loaded_weight = get_loaded_weight(loaded_weight)
                     loaded_weight = loaded_weight.reshape(
                         loaded_weight.shape[0], -1)
                     param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
@@ -1640,74 +1639,11 @@ class Qwen3VLForConditionalGeneration(
 
         return mint.cat(outputs, dim=0)
 
-    def set_model_inputs(self,
-                         input_ids=None,
-                         position_ids=None,
-                         intermediate_tensors=None,
-                         inputs_embeds=None):
-        #override the set_model_inputs method to support deepstack input embeds.
-        if input_ids is None:
-            dyn_input_ids = None
-        else:
-            dyn_input_ids = ms.Tensor(shape=[None] * input_ids.ndim,
-                                      dtype=mstype.int32)
-
-        if position_ids is None:
-            dyn_position_ids = None
-        else:
-            dyn_position_ids = ms.Tensor(shape=[None] * position_ids.ndim,
-                                         dtype=mstype.int32)
-
-        if inputs_embeds is None:
-            dyn_inputs_embeds = None
-        else:
-            dyn_inputs_embeds = ms.Tensor(shape=[None] * inputs_embeds.ndim,
-                                          dtype=inputs_embeds.dtype)
-
-        if intermediate_tensors is None:
-            dyn_intermediate_tensors = None
-        else:
-            dyn_intermediate_tensors = ms.Tensor(
-                shape=[None] * intermediate_tensors.ndim,
-                dtype=intermediate_tensors.dtype)
-
-        block_size = self.cache_config.block_size
-        num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
-        head_size = self.model_config.get_head_size()
-        kv_cache_shape = (None, block_size, num_kv_heads *
-                          head_size) if is_310p() else (None, block_size,
-                                                        num_kv_heads,
-                                                        head_size)
-
-        kv_cache_dtype = (self.model_config.dtype
-                          if self.cache_config.cache_dtype == "auto" else
-                          self.cache_config.cache_dtype)
-        if kv_cache_dtype in STR_DTYPE_TO_MS_DTYPE:
-            kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
-
-        num_layers = self.model_config.get_num_layers(self.parallel_config)
-
-        dyn_key_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
-        dyn_value_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
-        dyn_key_caches = mutable([dyn_key_cache for _ in range(num_layers)])
-        dyn_value_caches = mutable(
-            [dyn_value_cache for _ in range(num_layers)])
-
-        dyn_slot_mapping = Tensor(shape=[None], dtype=mstype.int32)
-        dynamic_attention_mask = Tensor(shape=[None, None],
-                                        dtype=self.model_config.dtype)
-        dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
-        dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
-        dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
+    def _get_extra_input_params(self):
+        """Override to provide deepstack input embeds for multimodal models.
+        
+        Returns a list containing dyn_deepstack_input_embeds tensor.
+        """
         dyn_deepstack_input_embeds = Tensor(shape=[None, None, None],
                                             dtype=self.model_config.dtype)
-
-        self.ready_model.set_inputs(
-            dyn_input_ids, dyn_position_ids, dyn_key_caches, dyn_value_caches,
-            dyn_slot_mapping, dynamic_attention_mask, dyn_batch_valid_length,
-            dyn_q_seq_lens, dyn_block_tables, dyn_intermediate_tensors,
-            dyn_inputs_embeds, dyn_deepstack_input_embeds)
-
-        dynamic_hidden_states = Tensor(shape=[None, None],
-                                       dtype=self.model_config.dtype)
-        self.ready_lm_head.set_inputs(dynamic_hidden_states)
+        return [dyn_deepstack_input_embeds]

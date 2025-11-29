@@ -38,7 +38,7 @@ env_vars = {
 }
 
 
-def run_vllm_qwen3_30b_a3b(enforce_eager=False):
+def run_vllm_qwen3_30b_a3b(enforce_eager=False, is_310p=False):
     """
     test case qwen3-30B-A3B
     """
@@ -59,7 +59,7 @@ def run_vllm_qwen3_30b_a3b(enforce_eager=False):
     llm = LLM(
         model=MODEL_PATH["Qwen3-30B-A3B"],
         gpu_memory_utilization=0.9,
-        tensor_parallel_size=2,
+        tensor_parallel_size=4 if is_310p else 2,
         max_model_len=4096,
         enforce_eager=enforce_eager,
     )
@@ -95,3 +95,13 @@ def test_vllm_qwen3_30b_a3b_eager():
     """
 
     run_vllm_qwen3_30b_a3b(enforce_eager=True)
+
+
+@patch.dict(os.environ, env_vars)
+@pytest.mark.level0
+def test_vllm_qwen3_30b_a3b_310p():
+    """
+    test case qwen3-30B-A3B
+    """
+
+    run_vllm_qwen3_30b_a3b(is_310p=True)

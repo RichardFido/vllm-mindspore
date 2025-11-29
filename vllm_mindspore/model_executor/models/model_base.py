@@ -490,34 +490,68 @@ class NativeModel(MsModelBase):
         dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
 
-        if supports_moe_dp_tp(self):
-            dyn_dp_pad_index = (Tensor(shape=[None], dtype=mstype.int32)
-                                if self.moe_dp_need_pad else None)
-            dyn_dp_unpad_index = (Tensor(shape=[None], dtype=mstype.int32)
-                                  if self.moe_dp_need_pad else None)
-            dyn_dp_pad_index_with_offset = (Tensor(shape=[None],
-                                                   dtype=mstype.int32)
-                                            if self.moe_dp_need_pad else None)
-            dyn_dp_unpad_index_total_with_offset = (Tensor(
-                shape=[None], dtype=mstype.int32) if self.moe_dp_need_pad else
-                                                    None)
-            self.ready_model.set_inputs(
-                dyn_input_ids, dyn_position_ids, dyn_key_caches,
-                dyn_value_caches, dyn_slot_mapping, dynamic_attention_mask,
-                dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
-                dyn_intermediate_tensors, dyn_inputs_embeds, dyn_dp_pad_index,
-                dyn_dp_unpad_index, dyn_dp_pad_index_with_offset,
-                dyn_dp_unpad_index_total_with_offset)
-        else:
-            self.ready_model.set_inputs(
-                dyn_input_ids, dyn_position_ids, dyn_key_caches,
-                dyn_value_caches, dyn_slot_mapping, dynamic_attention_mask,
-                dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
-                dyn_intermediate_tensors, dyn_inputs_embeds)
+        # Build set_inputs arguments
+        set_inputs_args = [
+            dyn_input_ids, dyn_position_ids, dyn_key_caches, dyn_value_caches,
+            dyn_slot_mapping, dynamic_attention_mask, dyn_batch_valid_length,
+            dyn_q_seq_lens, dyn_block_tables, dyn_intermediate_tensors,
+            dyn_inputs_embeds
+        ]
+        # Add MoE-specific parameters if available
+        if moe_params := self._get_moe_input_params():
+            set_inputs_args.extend([
+                moe_params['dp_pad_index'], moe_params['dp_unpad_index'],
+                moe_params['dp_pad_index_with_offset'],
+                moe_params['dp_unpad_index_total_with_offset']
+            ])
+        # Add extra parameters if available
+        # (e.g., deepstack_input_embeds for multimodal models)
+        if extra_params := self._get_extra_input_params():
+            set_inputs_args.extend(extra_params)
+
+        self.ready_model.set_inputs(*set_inputs_args)
 
         dynamic_hidden_states = Tensor(shape=[None, None],
                                        dtype=self.model_config.dtype)
         self.ready_lm_head.set_inputs(dynamic_hidden_states)
+
+    def _get_moe_input_params(self):
+        """Get MoE-specific input parameters.
+        
+        Returns a dict with MoE parameters if MoE is supported, None otherwise.
+        Subclasses can override this method to customize MoE parameter handling.
+        
+        Returns:
+            dict or None: Dict with keys: dp_pad_index, dp_unpad_index,
+                dp_pad_index_with_offset, dp_unpad_index_total_with_offset
+                if MoE is supported, None otherwise.
+        """
+        if supports_moe_dp_tp(self):
+            return {
+                'dp_pad_index': (Tensor(shape=[None], dtype=mstype.int32)
+                                 if self.moe_dp_need_pad else None),
+                'dp_unpad_index': (Tensor(shape=[None], dtype=mstype.int32)
+                                   if self.moe_dp_need_pad else None),
+                'dp_pad_index_with_offset':
+                (Tensor(shape=[None], dtype=mstype.int32)
+                 if self.moe_dp_need_pad else None),
+                'dp_unpad_index_total_with_offset':
+                (Tensor(shape=[None], dtype=mstype.int32)
+                 if self.moe_dp_need_pad else None),
+            }
+        return None
+
+    def _get_extra_input_params(self):
+        """Get extra input parameters for model-specific features.
+        
+        Subclasses can override this method to add additional parameters
+        (e.g., deepstack_input_embeds for multimodal models).
+        
+        Returns:
+            list or None: List of additional parameters to pass to set_inputs,
+                         or None if no extra parameters are needed.
+        """
+        return None
 
     def prepare_moe_dp_tp_inputs(self):
         """
