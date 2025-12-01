@@ -129,11 +129,8 @@ class Qwen3_VisionAttention(Qwen2_5_VisionAttention):
                 head_num=self.num_attention_heads_per_partition,
                 scale_value=1 / math.sqrt(self.hidden_size_per_attention_head),
                 input_layout="TH")
-        self.apply_rope = self._custom_ops_rope if is_custom_rope_available \
-            else self._native_rope
-        #TODO: now the _custom_ops_rope not ready yet,
-        # use custom rope in the future.
-        self.apply_rope = self._native_rope
+        self.apply_rope = (self._custom_ops_rope if is_custom_rope_available
+                           and not is_310p() else self._native_rope)
 
     def _native_rope(self, q, k, cos, sin, batch_valid_length):
         seq_length = q.shape[0]
