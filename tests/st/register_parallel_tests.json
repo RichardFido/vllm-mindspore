@@ -13,7 +13,15 @@
       "card_num": 2
     },
     {
+      "test_node_id": "st/models/qwen3_moe/test_vllm_qwen3_moe.py::test_vllm_qwen3_30b_a3b_aclgraph",
+      "card_num": 2
+    },
+    {
       "test_node_id": "st/lora/test_multilora_inference.py::test_multilora_inference",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "st/models/qwen2_5/test_vllm_mf_qwen_7b_v1.py::test_mf_qwen",
       "card_num": 2
     },
     {
@@ -22,6 +30,10 @@
     },
     {
       "test_node_id": "st/models/qwen2_5/test_vllm_qwen_7b_v1.py::test_qwen_enforce_eager",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "st/models/qwen2_5/test_vllm_qwen_7b_v1.py::test_qwen_aclgraph",
       "card_num": 2
     },
     {

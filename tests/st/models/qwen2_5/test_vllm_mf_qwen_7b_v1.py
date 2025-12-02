@@ -108,3 +108,39 @@ def test_mf_qwen_batch():
         generated_text = output.outputs[0].text
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
         assert generated_text in except_list[i]
+
+
+@patch.dict(os.environ, env_vars)
+@pytest.mark.level0
+def test_mf_qwen_aclgraph():
+    """
+    test case qwen2.5 7B
+    """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+
+    # Sample prompts.
+    prompts = [
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
+        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
+    ]
+
+    # Create a sampling params object.
+    sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
+
+    compilation_level = 3
+    # Create an LLM.
+    llm = LLM(model=MODEL_PATH["Qwen2.5-7B-Instruct"],
+              gpu_memory_utilization=0.9,
+              tensor_parallel_size=2,
+              compilation_config=compilation_level)
+    # Generate texts from the prompts. The output is a list of RequestOutput
+    # objects that contain the prompt, generated text, and other information.
+    outputs = llm.generate(prompts, sampling_params)
+    except_list = ['中性<｜Assistant｜> 这句话']
+    # Print the outputs.
+    for i, output in enumerate(outputs):
+        prompt = output.prompt
+        generated_text = output.outputs[0].text
+        print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+        assert generated_text == except_list[i]

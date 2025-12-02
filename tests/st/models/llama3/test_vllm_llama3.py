@@ -78,3 +78,42 @@ def test_vllm_llama3_8b():
         generated_text = output.outputs[0].text
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
         assert generated_text == except_list[i]
+
+
+@patch.dict(os.environ, env_vars)
+@pytest.mark.level0
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_onecard
+def test_vllm_llama3_8b_aclgraph():
+    """
+    test case llama3.1 8B
+    """
+
+    # Sample prompts.
+    prompts = [
+        "<|start_header_id|>user<|end_header_id|>\n\n"
+        "将文本分类为中性、负面或正面。 "
+        "\n文本：我认为这次假期还可以。 \n情感：<|eot_id|><|start_header_id|>"
+        "assistant<|end_header_id|>\n\n",
+    ]
+
+    # Create a sampling params object.
+    sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
+
+    # Create an LLM.
+    llm = LLM(model=MODEL_PATH["Llama-3.1-8B-Instruct"],
+              gpu_memory_utilization=0.9,
+              tensor_parallel_size=1,
+              max_model_len=4096,
+              compilation_config=3)
+    # Generate texts from the prompts.
+    # The output is a list of RequestOutput objects
+    # that contain the prompt, generated text, and other information.
+    outputs = llm.generate(prompts, sampling_params)
+    except_list = ['中性']
+    # Print the outputs.
+    for i, output in enumerate(outputs):
+        prompt = output.prompt
+        generated_text = output.outputs[0].text
+        print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+        assert generated_text == except_list[i]

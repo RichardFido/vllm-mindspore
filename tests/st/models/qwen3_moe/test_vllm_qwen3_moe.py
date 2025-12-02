@@ -38,7 +38,9 @@ env_vars = {
 }
 
 
-def run_vllm_qwen3_30b_a3b(enforce_eager=False, is_310p=False):
+def run_vllm_qwen3_30b_a3b(enforce_eager=False,
+                           is_310p=False,
+                           enable_aclgraph=False):
     """
     test case qwen3-30B-A3B
     """
@@ -55,6 +57,10 @@ def run_vllm_qwen3_30b_a3b(enforce_eager=False, is_310p=False):
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
+    compilation_level = 0
+    if enable_aclgraph:
+        compilation_level = 3
+
     # Create an LLM.
     llm = LLM(
         model=MODEL_PATH["Qwen3-30B-A3B"],
@@ -62,6 +68,7 @@ def run_vllm_qwen3_30b_a3b(enforce_eager=False, is_310p=False):
         tensor_parallel_size=4 if is_310p else 2,
         max_model_len=4096,
         enforce_eager=enforce_eager,
+        compilation_config=compilation_level,
     )
     # Generate texts from the prompts.
     # The output is a list of RequestOutput objects
@@ -105,3 +112,15 @@ def test_vllm_qwen3_30b_a3b_310p():
     """
 
     run_vllm_qwen3_30b_a3b(is_310p=True)
+
+
+@patch.dict(os.environ, env_vars)
+@pytest.mark.level0
+def test_vllm_qwen3_30b_a3b_aclgraph():
+    """
+    test case qwen3-30B-A3B eager mode
+    """
+
+    run_vllm_qwen3_30b_a3b(enforce_eager=False,
+                           is_310p=False,
+                           enable_aclgraph=True)
