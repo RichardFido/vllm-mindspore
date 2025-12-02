@@ -175,7 +175,7 @@ def test_vllm_qwen3_8b_310p():
 def test_vllm_qwen3_0_6b_aclgraph():
     """
     Test Summary:
-        test case qwen3 0.6B
+        test case qwen3 0.6B with aclgraph
     Expected Result:
         Running successfully, the request result meets expectations.
     Model Info:

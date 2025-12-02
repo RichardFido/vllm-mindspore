@@ -86,7 +86,12 @@ def test_vllm_llama3_8b():
 @pytest.mark.env_onecard
 def test_vllm_llama3_8b_aclgraph():
     """
-    test case llama3.1 8B
+    Test Summary:
+        test case llama3 8B with aclgraph
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        LLAMA3-8B
     """
 
     # Sample prompts.
