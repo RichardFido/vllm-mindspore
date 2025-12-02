@@ -62,6 +62,7 @@ except ImportError as e:
     mindone_supported = False
 
 _NATIVE_MODELS = {
+    "MiniCPMForCausalLM": ("minicpm", "MiniCPMForCausalLM"),
     "LlamaForCausalLM": ("llama", "LlamaForCausalLM"),
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
     "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),

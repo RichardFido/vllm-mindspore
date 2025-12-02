@@ -23,6 +23,30 @@ from mindspore import mint, nn, ops
 from vllm_mindspore.utils import LazyDict
 
 
+class FatreluAndMul(nn.Cell):
+    """An activation function for FATReLU.
+
+    The function computes x -> FATReLU(x[:d]) * x[d:] where
+    d = x.shape[-1] // 2.
+    This is used in MiniCPM and MiniCPM4.
+
+    Shapes:
+        x: (num_tokens, 2 * d) or (batch_size, seq_len, 2 * d)
+        return: (num_tokens, d) or (batch_size, seq_len, d)
+    """
+
+    def __init__(self, threshold: float = 0.0):
+        super().__init__()
+        self.threshold = threshold
+
+    def construct(self, x):
+        d = x.shape[-1] // 2
+        x1 = x[..., :d]
+        x2 = x[..., d:]
+        x1 = mint.nn.functional.threshold(x1, self.threshold, 0.0)
+        return x1 * x2
+
+
 class SiluAndMul(nn.Cell):
     """An activation function for SwiGLU.
 
