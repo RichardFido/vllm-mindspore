@@ -27,7 +27,6 @@ from typing import Any, Literal, Optional, Union
 
 import msgspec
 import torch
-import vllm.envs as envs
 from pydantic.dataclasses import dataclass
 from transformers import PretrainedConfig
 from vllm.config import CacheConfig, VllmConfig, get_attr_docs
@@ -85,8 +84,7 @@ def vllm_config_post_init(self):
     if self.compilation_config is None:
         self.compilation_config = CompilationConfig()
     self.compilation_config.cudagraph_mode = CUDAGraphMode.NONE
-    if envs.VLLM_USE_V1 and self.model_config is not None and \
-        not self.model_config.enforce_eager:
+    if self.model_config is not None and not self.model_config.enforce_eager:
         # NOTE(woosuk): Currently, we use inductor because the piecewise
         # CUDA graphs do not work properly with the custom CUDA kernels.
         # FIXME(woosuk): Disable inductor to reduce the compilation time

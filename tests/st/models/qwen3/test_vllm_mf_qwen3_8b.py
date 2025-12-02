@@ -70,7 +70,7 @@ def run_mf_qwen3_network():
         assert generated_text == except_list[i]
 
 
-@patch.dict(os.environ, {**env_vars, "VLLM_USE_V1": "1"})
+@patch.dict(os.environ, env_vars)
 @pytest.mark.level0
 def test_mf_qwen3_v1():
     """Test qwen3 8B using V0 LLMEngine."""

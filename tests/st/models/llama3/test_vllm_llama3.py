@@ -38,7 +38,6 @@ env_vars = {
     "HCCL_DETERMINISTIC": "true",
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
     "ATB_LLM_LCOC_ENABLE": "0",
-    "VLLM_USE_V1": "1",
 }
 
 

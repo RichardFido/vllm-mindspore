@@ -22,7 +22,6 @@
 from typing import TYPE_CHECKING, Optional, Union
 
 import torch
-import vllm.envs as envs
 from vllm.config.compilation import CompilationLevel, CUDAGraphMode
 from vllm.logger import init_logger
 from vllm.platforms.interface import Platform, PlatformEnum
@@ -87,21 +86,7 @@ class AscendPlatform(Platform):
         model_config = vllm_config.model_config
 
         if parallel_config.worker_cls == "auto":
-            if vllm_config.speculative_config:
-                if envs.VLLM_USE_V1:
-                    parallel_config.worker_cls = \
-                            "vllm.v1.worker.gpu_worker.Worker"
-                else:
-                    parallel_config.worker_cls = \
-                        "vllm.spec_decode.spec_decode_worker.create_spec_worker"
-                    parallel_config.sd_worker_cls = \
-                        "vllm.worker.worker.Worker"
-            else:
-                if envs.VLLM_USE_V1:
-                    parallel_config.worker_cls = \
-                            "vllm.v1.worker.gpu_worker.Worker"
-                else:
-                    parallel_config.worker_cls = "vllm.worker.worker.Worker"
+            parallel_config.worker_cls = "vllm.v1.worker.gpu_worker.Worker"
 
         cache_config = vllm_config.cache_config
         if cache_config and cache_config.block_size is None:
@@ -137,15 +122,6 @@ class AscendPlatform(Platform):
         return torch.cuda.max_memory_allocated(device)
 
     @classmethod
-    def get_device_communicator_cls(cls) -> str:
-        """
-        Get device specific communicator class for distributed communication.
-        """
-        if envs.VLLM_USE_V1:
-            return "vllm.distributed.device_communicators.cuda_communicator.CudaCommunicator"  # noqa E501
-        return "vllm.distributed.device_communicators.base_device_communicator.DeviceCommunicatorBase"  # noqa E501
-
-    @classmethod
     def get_device_total_memory(cls, device_id: int = 0) -> int:
         """Get the total memory of a device in bytes."""
         device_props = torch.cuda.get_device_properties(device_id)
@@ -157,19 +133,6 @@ class AscendPlatform(Platform):
 
     def get_punica_wrapper(cls) -> str:
         return "vllm_mindspore.lora.punica_wrapper.punica_npu.PunicaWrapperNPU"
-
-    @classmethod
-    def use_all_gather(cls) -> bool:
-        """
-        Whether to use allgather in LogitsProcessor to gather the logits.
-        """
-        import vllm.envs as envs
-        from vllm.config import get_current_vllm_config
-
-        parallel_config = get_current_vllm_config().parallel_config
-        return (envs.VLLM_USE_V1
-                or parallel_config.distributed_executor_backend
-                == "external_launcher")
 
     @classmethod
     def pre_register_and_update(cls, parser=None):

@@ -86,8 +86,7 @@ def resolve_mindone_transformers_arch(model_config: ModelConfig,
             if not model_module.is_backend_compatible():
                 raise ValueError(
                     f"{arch} has no vLLM implementation and the Transformers "
-                    "implementation is not compatible with vLLM. Try setting "
-                    "VLLM_USE_V1=0.")
+                    "implementation is not compatible with vLLM.")
             logger.warning(
                 "%s has no vLLM implementation, falling back to Transformers "
                 "implementation. Some features may not be supported and "
