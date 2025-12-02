@@ -97,7 +97,12 @@ def test_qwen_enforce_eager():
 @pytest.mark.level0
 def test_qwen_aclgraph():
     """
-    Test qwen2.5 7B using aclgraph.
+    Test Summary:
+        test case qwen2.5 7B with aclgraph in two devices
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen2.5-7B
     """
     import vllm_mindspore
     run_vllm_qwen(enforce_eager=False, enable_aclgraph=True)

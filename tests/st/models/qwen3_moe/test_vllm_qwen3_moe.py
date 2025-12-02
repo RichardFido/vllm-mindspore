@@ -118,7 +118,12 @@ def test_vllm_qwen3_30b_a3b_310p():
 @pytest.mark.level0
 def test_vllm_qwen3_30b_a3b_aclgraph():
     """
-    test case qwen3-30B-A3B eager mode
+    Test Summary:
+        test case qwen3 30B with aclgraph in two devices
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen3-30B
     """
 
     run_vllm_qwen3_30b_a3b(enforce_eager=False,
