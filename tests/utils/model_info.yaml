@@ -2,6 +2,10 @@
 # https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/
 # And it will be mapped to /home/workspace/mindspore_dataset/weight/ in the CI environment
 
+MiniCPM4-0.5B:
+  description: "MiniCPM4-0.5B, HF default configuration, source from https://huggingface.co/openbmb/MiniCPM4-0.5B"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/MiniCPM4-0.5B"
+
 Llama-3.1-8B-Instruct:
   description: "Llama-3.1-8B, HF default configuration, source from https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct"
   archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Llama-3.1-8B-Instruct"

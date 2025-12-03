@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # isort:skip_file
-"""test vllm llama3."""
+"""test vllm minicpm4-0.5b."""
 import pytest
 from unittest.mock import patch
 
@@ -42,81 +42,35 @@ env_vars = {
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
-def test_vllm_llama3_8b():
+def test_vllm_minicpm4_0_5b():
     """
     Test Summary:
-        Test case llama3 8B model inference.
+        Test case MiniCPM4-0.5B model inference.
     Expected Result:
         Running successfully, the request result meets expectations.
     Model Info:
-        LLaMA3-8B
+        MiniCPM4-0.5B
     """
 
     # Sample prompts.
     prompts = [
-        "<|start_header_id|>user<|end_header_id|>\n\n"
-        "将文本分类为中性、负面或正面。 "
-        "\n文本：我认为这次假期还可以。 \n情感：<|eot_id|><|start_header_id|>"
-        "assistant<|end_header_id|>\n\n",
+        "<|im_start|>user\n请直接回答，中国的首都是那座城市？<|im_end|>\n<|im_start|>assistant\n",
     ]
 
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
-    llm = LLM(model=MODEL_PATH["Llama-3.1-8B-Instruct"],
-              gpu_memory_utilization=0.9,
-              tensor_parallel_size=1,
-              max_model_len=4096)
-    # Generate texts from the prompts.
-    # The output is a list of RequestOutput objects
-    # that contain the prompt, generated text, and other information.
-    outputs = llm.generate(prompts, sampling_params)
-    expected_list = ['中性']
-    # Print the outputs.
-    for i, output in enumerate(outputs):
-        prompt = output.prompt
-        generated_text = output.outputs[0].text
-        print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
-        assert generated_text == expected_list[i]
-
-
-@patch.dict(os.environ, env_vars)
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_onecard
-def test_vllm_llama3_8b_aclgraph():
-    """
-    Test Summary:
-        Test case llama3 8B model inference with ACLGraph.
-    Expected Result:
-        Running successfully, the request result meets expectations.
-    Model Info:
-        LLAMA3-8B
-    """
-
-    # Sample prompts.
-    prompts = [
-        "<|start_header_id|>user<|end_header_id|>\n\n"
-        "将文本分类为中性、负面或正面。 "
-        "\n文本：我认为这次假期还可以。 \n情感：<|eot_id|><|start_header_id|>"
-        "assistant<|end_header_id|>\n\n",
-    ]
-
-    # Create a sampling params object.
-    sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
-
-    # Create an LLM.
-    llm = LLM(model=MODEL_PATH["Llama-3.1-8B-Instruct"],
+    llm = LLM(model=MODEL_PATH["MiniCPM4-0.5B"],
               gpu_memory_utilization=0.9,
               tensor_parallel_size=1,
               max_model_len=4096,
-              compilation_config=3)
+              trust_remote_code=True)
     # Generate texts from the prompts.
     # The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
-    expected_list = ['中性']
+    expected_list = ['中国的首都是北京。']
     # Print the outputs.
     for i, output in enumerate(outputs):
         prompt = output.prompt

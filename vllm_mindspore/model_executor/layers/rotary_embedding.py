@@ -1348,6 +1348,150 @@ class InferYaRNScalingRotaryEmbedding(InferRotaryEmbedding):
         return freqs_cos, freqs_sin
 
 
+class InferPhi3LongRoPEScaledRotaryEmbedding(nn.Cell):
+    """Phi3 family of models scaled rotary embedding for MindSpore.
+
+    Based on the original Phi3LongRoPEScaledRotaryEmbedding implementation.
+    """
+
+    def __init__(
+        self,
+        head_size: int,
+        rotary_dim: int,
+        max_position_embeddings: int,
+        original_max_position_embeddings: int,
+        base: float,
+        is_neox_style: bool,
+        short_factor: list[float],
+        long_factor: list[float],
+        dtype: mstype.Type,
+        short_mscale: Optional[float] = None,
+        long_mscale: Optional[float] = None,
+    ):
+        super().__init__()
+
+        if is_neox_style is False:
+            raise ValueError("`InferPhi3LongRoPEScaledRotaryEmbedding`"
+                             " only supports neox_style.")
+
+        self.rotary_dim = rotary_dim
+        self.head_size = head_size
+        self.max_position_embeddings = max_position_embeddings
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.base = base
+        self.short_factor = short_factor
+        self.long_factor = long_factor
+
+        scale = self.max_position_embeddings / \
+                self.original_max_position_embeddings
+        if scale <= 1.0:
+            scaling_factor = 1.0
+        else:
+            scaling_factor = math.sqrt(
+                1 + math.log(scale) /
+                math.log(self.original_max_position_embeddings))
+        if short_mscale is None:
+            short_mscale = scaling_factor
+        if long_mscale is None:
+            long_mscale = scaling_factor
+
+        self.short_mscale = short_mscale
+        self.long_mscale = long_mscale
+
+        short_cache = self._compute_cos_sin_cache(
+            original_max_position_embeddings, short_factor, short_mscale)
+        short_cache = short_cache.astype(dtype)
+
+        long_cache = self._compute_cos_sin_cache(max_position_embeddings,
+                                                 long_factor, long_mscale)
+        long_cache = long_cache.astype(dtype)
+
+        long_short_cache = ops.concat([short_cache, long_cache], axis=0)
+        self.long_short_cos_sin_cache = ms.Tensor(long_short_cache)
+
+    def _compute_inv_freq(self, rescale_factors: list[float]) -> Tensor:
+        rescale_factors_array = np.array(rescale_factors, dtype=np.float32)
+        rescale_factors_tensor = Tensor(rescale_factors_array)
+
+        arange_result = ops.arange(0, self.rotary_dim, 2, dtype=mstype.float32)
+        div_result = arange_result / self.rotary_dim
+        power_result = ops.pow(self.base, div_result)
+        inv_freq = 1.0 / (rescale_factors_tensor * power_result)
+        return inv_freq
+
+    def _compute_cos_sin_cache(
+        self,
+        max_position_embeddings: int,
+        rescale_factors: list[float],
+        mscale: float,
+    ) -> Tensor:
+        inv_freq = self._compute_inv_freq(rescale_factors)
+        t = ops.arange(max_position_embeddings, dtype=mstype.float32)
+        freqs = ops.outer(t, inv_freq)
+        cos = ops.cos(freqs) * mscale
+        sin = ops.sin(freqs) * mscale
+        cache = ops.concat((cos, sin), axis=-1)
+        return cache
+
+    def _rotate_neox(self, x: Tensor) -> Tensor:
+        """Rotates the input tensor for NeoX-style rotary embeddings.
+        
+        Args:
+            x: Input tensor with shape [..., dim]
+            
+        Returns:
+            Rotated tensor with the same shape
+        """
+        x1 = x[..., :x.shape[-1] // 2]
+        x2 = x[..., x.shape[-1] // 2:]
+        return ops.concat((-x2, x1), axis=-1)
+
+    def construct(
+        self,
+        positions: Tensor,
+        query: Tensor,
+        key: Tensor,
+        offsets: Optional[Tensor] = None,
+    ) -> tuple[Tensor, Tensor]:
+        query = query.view(*query.shape[:-1], -1, self.head_size)
+        key = key.view(*key.shape[:-1], -1, self.head_size)
+
+        k = self.original_max_position_embeddings
+        positions_greater_k = ops.gt(positions, k)
+        any_positions_greater = ops.any(positions_greater_k)
+        full_like_positions = ops.full_like(positions, k)
+        long_prompt_offset = ops.cast(any_positions_greater,
+                                      mstype.float32) * full_like_positions
+        long_prompt_offset = ops.cast(long_prompt_offset, mstype.int64)
+
+        idx = (positions + long_prompt_offset
+               ) if long_prompt_offset is not None else positions
+        idx = (idx + offsets) if offsets is not None else idx
+
+        cos_sin = ops.gather(self.long_short_cos_sin_cache, idx, 0)
+
+        cos, sin = ops.split(cos_sin, cos_sin.shape[-1] // 2, axis=-1)
+        cos = ops.tile(cos, (1, 2)).expand_dims(-2)
+        sin = ops.tile(sin, (1, 2)).expand_dims(-2)
+
+        query_rot = query[..., :self.rotary_dim]
+        query_pass = query[..., self.rotary_dim:]
+        rotated_query = self._rotate_neox(query_rot)
+        query_rot = query_rot * cos + rotated_query * sin
+        query = ops.concat((query_rot, query_pass), axis=-1)
+
+        key_rot = key[..., :self.rotary_dim]
+        key_pass = key[..., self.rotary_dim:]
+        rotated_key = self._rotate_neox(key_rot)
+        key_rot = key_rot * cos + rotated_key * sin
+        key = ops.concat((key_rot, key_pass), axis=-1)
+
+        query_flat = query.view(*query.shape[:-2], -1)
+        key_flat = key.view(*key.shape[:-2], -1)
+
+        return query_flat, key_flat
+
+
 def get_rope(
     head_size: int,
     rotary_dim: int,
@@ -1428,6 +1572,19 @@ def get_rope(
             rotary_emb = InferYaRNScalingRotaryEmbedding(
                 head_size, rotary_dim, original_max_position, base,
                 is_neox_style, scaling_factor, dtype, **extra_kwargs)
+        elif scaling_type == "longrope":
+            short_factor = rope_scaling["short_factor"]
+            long_factor = rope_scaling["long_factor"]
+            original_max_position = rope_scaling[
+                "original_max_position_embeddings"]
+            extra_kwargs = {
+                k: v
+                for k, v in rope_scaling.items()
+                if k in ("short_factor", "long_factor")
+            }
+            rotary_emb = InferPhi3LongRoPEScaledRotaryEmbedding(
+                head_size, rotary_dim, max_position, original_max_position,
+                base, is_neox_style, short_factor, long_factor, dtype)
         else:
             raise NotImplementedError
 
