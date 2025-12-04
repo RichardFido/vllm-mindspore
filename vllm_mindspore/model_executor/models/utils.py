@@ -24,7 +24,6 @@ from typing import Optional, Union
 
 import mindspore as ms
 from mindspore import Tensor, mint, nn, ops
-from vllm import envs
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.multimodal.inputs import NestedTensors
@@ -298,7 +297,7 @@ def is_use_ringmla(vllm_config, mf_config=None):
     if vllm_config.model_config.hf_config.model_type == "deepseek_mtp":
         # weight of deepseek mtp model has not been quantized
         return False
-    use_ringmla = (vllm_config.model_config.use_mla and envs.VLLM_USE_V1
+    use_ringmla = (vllm_config.model_config.use_mla
                    and vllm_config.model_config.quantization is not None
                    and vllm_config.parallel_config.tensor_parallel_size < 16)
     return use_ringmla
