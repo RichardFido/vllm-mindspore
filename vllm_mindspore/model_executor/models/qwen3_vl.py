@@ -501,6 +501,8 @@ class Qwen3_VisionTransformer(nn.Cell):
                 weight_loader(param, loaded_weight, shard_id)
                 break
             else:
+                if name not in params_dict:
+                    continue
                 param = params_dict[name]
                 # Conv3d -> nn.Dense needs to flatten the weight
                 if "patch_embed.proj.weight" in name:
