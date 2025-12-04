@@ -94,7 +94,11 @@ class AscendPlatform(Platform):
             cache_config.block_size = 128
 
         model_config = vllm_config.model_config
-        model_config.disable_cascade_attn = True
+
+        # Model config may not be initialized when calling `VllmConfig()`,
+        # so check if `model_config` is `None`
+        if model_config is not None:
+            model_config.disable_cascade_attn = True
 
         vllm_config.compilation_config.splitting_ops = list(
             vllm_config.compilation_config._attention_ops)

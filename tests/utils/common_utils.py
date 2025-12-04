@@ -86,14 +86,15 @@ def setup_function():
 
         # Randomly specify LCCL and HCCL ports for cases without specified port,
         # mainly in single card concurrent scenarios, to avoid port conflicts.
+        # Valid port range in CI environment is [1024, 65520]
         lccl_port = os.getenv("LCAL_COMM_ID", None)
         if not lccl_port:
-            lccl_port = random.randint(61000, 65535)
+            lccl_port = random.randint(61000, 65500)
             os.environ["LCAL_COMM_ID"] = f"127.0.0.1:{lccl_port}"
 
         hccl_port = os.getenv("HCCL_IF_BASE_PORT", None)
         if not hccl_port:
-            hccl_port = random.randint(61000, 65535)
+            hccl_port = random.randint(61000, 65500)
             os.environ["HCCL_IF_BASE_PORT"] = str(hccl_port)
 
 
