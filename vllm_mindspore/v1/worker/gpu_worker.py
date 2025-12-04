@@ -37,6 +37,15 @@ def compile_or_warm_up_model(self) -> None:
     max_num_reqs = 1
     # Only pp_last_rank has lm_head, which is required by _dummy_sampler_run.
 
+    # If ringmla is enabled, chunked warmup process is additionally executed.
+    if hasattr(self.model_runner.model, "has_chunked_warmup") \
+            and not self.model_runner.model.has_chunked_warmup:
+        hidden_states, last_hidden_states = \
+            self.model_runner._dummy_run(
+                num_tokens=max_num_reqs,
+                skip_eplb=True,
+            )
+
     # capture decode aclgraph
     if not self.model_config.enforce_eager:
         self.model_runner.capture_model()
