@@ -25,6 +25,7 @@ import yaml
 import time
 import signal
 import psutil
+import socket
 import subprocess
 import random
 import regex as re
@@ -43,6 +44,12 @@ logging.basicConfig(level=logging.INFO,
 MODEL_PATH = {}
 
 HAS_MODEL_PATH_REGISTERED = False
+# Valid port range in CI environment is [1024, 65520]
+PORT_LOWER_BOUND = 1024
+PORT_UPPER_BOUND = 65520
+BASE_PORT = 8000
+LCCL_BASE_PORT = 21000
+HCCL_BASE_PORT = 41000
 
 
 def register_model_path_from_yaml(yaml_file):
@@ -68,6 +75,37 @@ def register_model_path_from_yaml(yaml_file):
 register_model_path_from_yaml("model_info.yaml")
 
 
+def is_port_available(port):
+    """Determine if the port is available (unoccupied)"""
+    if not isinstance(
+            port, int) or not (PORT_LOWER_BOUND <= port <= PORT_UPPER_BOUND):
+        raise ValueError(
+            f"The port number must be an integer between "
+            f"{PORT_LOWER_BOUND}-{PORT_UPPER_BOUND}, but got {port}.")
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("", port))
+            return True
+    except OSError:
+        logger.info("Port %d is already in use", port)
+        return False
+
+
+def get_available_port(base_port):
+    """
+    Return available port numbers, first check if the base
+    port is available. while not, add 10 until the port is
+    available (unoccupied)
+    """
+    available_port = base_port
+    step_offset = 10
+    while not is_port_available(available_port):
+        # Increment port number if already in use
+        available_port += step_offset
+    return available_port
+
+
 def setup_function():
     """pytest will call the setup_function before case executes."""
     device_id = os.environ.pop("DEVICE_ID", None)
@@ -82,20 +120,22 @@ def setup_function():
         os.environ["ASCEND_RT_VISIBLE_DEVICES"] = device_id
 
         # Used to distinguish multiple online services running simultaneously.
-        os.environ["TEST_SERVE_PORT"] = f"{8000 + int(device_id)}"
+        os.environ[
+            "TEST_SERVE_PORT"] = f"{get_available_port(BASE_PORT + int(device_id))}"
 
         # Randomly specify LCCL and HCCL ports for cases without specified port,
         # mainly in single card concurrent scenarios, to avoid port conflicts.
-        # Valid port range in CI environment is [1024, 65520]
         lccl_port = os.getenv("LCAL_COMM_ID", None)
         if not lccl_port:
-            lccl_port = random.randint(61000, 65500)
-            os.environ["LCAL_COMM_ID"] = f"127.0.0.1:{lccl_port}"
+            lccl_port = random.randint(LCCL_BASE_PORT, HCCL_BASE_PORT - 1)
+            os.environ[
+                "LCAL_COMM_ID"] = f"127.0.0.1:{get_available_port(lccl_port)}"
 
         hccl_port = os.getenv("HCCL_IF_BASE_PORT", None)
         if not hccl_port:
-            hccl_port = random.randint(61000, 65500)
-            os.environ["HCCL_IF_BASE_PORT"] = str(hccl_port)
+            hccl_port = random.randint(HCCL_BASE_PORT, PORT_UPPER_BOUND)
+            os.environ["HCCL_IF_BASE_PORT"] = str(
+                get_available_port(hccl_port))
 
 
 def cleanup_subprocesses(pid=None) -> None:

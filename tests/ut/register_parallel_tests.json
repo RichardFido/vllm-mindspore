@@ -3,6 +3,22 @@
     {
       "test_node_id": "ut/sampling/test_vllm_sampling.py::test_vllm_sampling_n_logprobs",
       "card_num": 2
+    },
+    {
+      "test_node_id": "ut/entrypoints/test_vllm_basic_api.py::test_vllm_mf_offline_002",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "ut/entrypoints/test_vllm_basic_api.py::test_vllm_mf_server_001",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "ut/entrypoints/test_vllm_basic_api.py::test_vllm_server_003",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "ut/entrypoints/test_vllm_basic_api.py::test_vllm_mf_server_003",
+      "card_num": 2
     }
   ],
   "registered_310p_tests": []

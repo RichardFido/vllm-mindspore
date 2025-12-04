@@ -21,8 +21,10 @@ import pytest
 import importlib
 
 from multiprocessing.pool import Pool
-from tests.utils.common_utils import logger
-from tests.utils.common_utils import teardown_function, setup_function
+from tests.utils.common_utils import (logger, teardown_function,
+                                      setup_function, get_available_port,
+                                      BASE_PORT, LCCL_BASE_PORT,
+                                      HCCL_BASE_PORT)
 
 level_marks = ("level0", "level1", "level2", "level3", "level4")
 
@@ -39,6 +41,11 @@ HAS_TESTS_REGISTERED = False
 
 registered_910b_tests = []
 registered_310p_tests = []
+
+
+def reset_registered_list():
+    registered_910b_tests.clear()
+    registered_310p_tests.clear()
 
 
 def register_tests_by_platform(register_cases, register_list):
@@ -102,9 +109,9 @@ def tasks_resource_alloc(tasks: list[tuple[int]]) -> list[tuple[str]]:
     """
     device_limit = 8
     device_base = 0
-    lccl_base_port = 20068
-    hccl_base_port = 51000
-    base_port = 8000
+    lccl_base_port = LCCL_BASE_PORT
+    hccl_base_port = HCCL_BASE_PORT
+    base_port = BASE_PORT
 
     out_tasks: list[tuple[str]] = []
     for task in tasks:
@@ -117,13 +124,13 @@ def tasks_resource_alloc(tasks: list[tuple[int]]) -> list[tuple[str]]:
 
         device_str = ",".join(
             [str(d) for d in range(device_base, device_base + resource_req)])
-        lccl_str = f"127.0.0.1:{lccl_base_port}"
+        lccl_str = f"127.0.0.1:{get_available_port(lccl_base_port)}"
 
         commands = [
             f"export ASCEND_RT_VISIBLE_DEVICES={device_str}",
             f"export LCAL_COMM_ID={lccl_str}",
-            f"export HCCL_IF_BASE_PORT={hccl_base_port}",
-            f"export TEST_SERVE_PORT={base_port}"
+            f"export HCCL_IF_BASE_PORT={get_available_port(hccl_base_port)}",
+            f"export TEST_SERVE_PORT={get_available_port(base_port)}"
         ]
 
         device_base += resource_req
@@ -318,6 +325,22 @@ def run_tasks(cases):
     check_results(commands, results)
 
 
+def retrieve_tests_from_path(abs_path):
+    """Retrieve tests from the specified path (ut/st)"""
+    if os.path.exists(abs_path):
+        logger.warning(
+            "Collect and execute parallel tests under the directory: %s.",
+            abs_path)
+        reset_registered_list()
+        register_json_path = os.path.join(abs_path,
+                                          "register_parallel_tests.json")
+        load_registered_tests_from_json(register_json_path)
+
+        # Dynamically generate test cases
+        generate_parallel_cases(registered_910b_tests, platform="910B")
+        generate_parallel_cases(registered_310p_tests, platform="310P")
+
+
 def load_and_generate_tests():
     """
     Load and generate tests form register_parallel_tests.json
@@ -326,22 +349,13 @@ def load_and_generate_tests():
         os.path.join(os.path.abspath(__file__), ".."))
     st_abs_path = os.path.join(current_abs_path, "st")
     ut_abs_path = os.path.join(current_abs_path, "ut")
+    if not os.path.exists(st_abs_path) and not os.path.exists(ut_abs_path):
+        raise RuntimeError("Invalid path for register_parallel_tests.json")
+
     global HAS_TESTS_REGISTERED
     if not HAS_TESTS_REGISTERED:
-        if os.path.exists(ut_abs_path) and not os.path.exists(st_abs_path):
-            register_json_path = os.path.join(ut_abs_path,
-                                              "register_parallel_tests.json")
-        elif os.path.exists(st_abs_path) and not os.path.exists(ut_abs_path):
-            register_json_path = os.path.join(st_abs_path,
-                                              "register_parallel_tests.json")
-        else:
-            raise RuntimeError("Invalid path for register_parallel_tests.json")
-
-        load_registered_tests_from_json(register_json_path)
-
-        # Dynamically generate test cases
-        generate_parallel_cases(registered_910b_tests, platform="910B")
-        generate_parallel_cases(registered_310p_tests, platform="310P")
+        retrieve_tests_from_path(ut_abs_path)
+        retrieve_tests_from_path(st_abs_path)
         HAS_TESTS_REGISTERED = True
 
 

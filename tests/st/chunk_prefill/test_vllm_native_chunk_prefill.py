@@ -37,6 +37,17 @@ env_vars = {
 
 QWEN_7B_MODEL = MODEL_PATH["Qwen2.5-7B-Instruct"]
 
+# Long prompts with more than max_num_batched_tokens tokens
+LONG_PROMPT = "I love Beijing, because it is a city with a long history " \
+              "and profound cultural heritage. Walking through its ancient " \
+              "hutongs, one can almost feel the whispers of the past. The " \
+              "Forbidden City, an architectural marvel that once housed " \
+              "emperors, stands as a testament to the city's imperial " \
+              "past. Meanwhile, the Great Wall, though not within the city " \
+              "limits, is easily accessible from Beijing and offers a " \
+              "glimpse into the strategic genius and resilience of ancient " \
+              "China."
+
 
 @pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
@@ -52,15 +63,7 @@ def test_vllm_ms_offline_chunked_prefill_001():
     Model Info:
         Qwen2.5-7B-Instruct
     """
-    prompts = "I love Beijing, because it is a city with a long history " \
-              "and profound cultural heritage. Walking through its ancient " \
-              "hutongs, one can almost feel the whispers of the past. The " \
-              "Forbidden City, an architectural marvel that once housed " \
-              "emperors, stands as a testament to the city's imperial " \
-              "past. Meanwhile, the Great Wall, though not within the city " \
-              "limits, is easily accessible from Beijing and offers a " \
-              "glimpse into the strategic genius and resilience of ancient " \
-              "China."
+    prompts = LONG_PROMPT
     sampling_params = SamplingParams(temperature=0.0,
                                      top_p=0.95,
                                      max_tokens=100)
@@ -128,6 +131,37 @@ def test_vllm_ms_offline_chunked_prefill_004():
     assert test_results.get('failure') == 0
 
 
+def run_ms_server_cp_base_qwen(log_name, extra_params, prompts):
+    model = QWEN_7B_MODEL
+    process = start_vllm_server(model,
+                                log_name,
+                                start_mode='serve',
+                                extra_params=extra_params)
+    serve_port = os.getenv("TEST_SERVE_PORT", None)
+    if serve_port:
+        url = f'http://localhost:{serve_port}/v1/completions'
+    else:
+        url = 'http://localhost:8000/v1/completions'
+
+    data = {
+        "model": model,
+        "prompt": prompts,
+        "max_tokens": 100,
+        "top_k": -1,
+        "top_p": 0.95,
+        "temperature": 0.5
+    }
+    json_data = json.dumps(data)
+    response = requests.post(url,
+                             data=json_data,
+                             headers={'Content-Type': 'application/json'})
+    stop_vllm_server(process)
+    assert response.status_code == 200
+    result = get_key_counter_from_log(log_name,
+                                      "Run with native model backend")
+    assert result >= 1
+
+
 @pytest.mark.level1
 @patch.dict(os.environ, env_vars)
 def test_vllm_ms_server_chunked_prefill_001():
@@ -142,34 +176,10 @@ def test_vllm_ms_server_chunked_prefill_001():
     """
     prompts = "I love Beijing"
     log_name = "test_vllm_ms_server_chunked_prefill_001.log"
-    process = start_vllm_server(
-        QWEN_7B_MODEL,
-        log_name,
-        extra_params='--tensor_parallel_size=2 --enable-chunked-prefill '
-        '--max_num_seqs 16 --max-num-batched-tokens 32 ')
-    serve_port = os.getenv("TEST_SERVE_PORT", None)
-    if serve_port:
-        url = f'http://localhost:{serve_port}/v1/completions'
-    else:
-        url = 'http://localhost:8000/v1/completions'
-    data = {
-        "model": QWEN_7B_MODEL,
-        "prompt": prompts,
-        "max_tokens": 100,
-        "top_k": -1,
-        "top_p": 0.95,
-        "temperature": 0.5
-    }
-    json_data = json.dumps(data)
-    response = requests.post(url,
-                             data=json_data,
-                             headers={'Content-Type': 'application/json'})
-    logger.info(response.json())
-    stop_vllm_server(process)
-    assert response.status_code == 200
-    result = get_key_counter_from_log(log_name,
-                                      "Run with native model backend")
-    assert result >= 1
+    extra_params = '--tensor_parallel_size=2 --enable-chunked-prefill '
+    '--max_num_seqs 16 --max-num-batched-tokens 32 '
+
+    run_ms_server_cp_base_qwen(log_name, extra_params, prompts)
 
 
 @pytest.mark.level1
@@ -189,33 +199,9 @@ def test_vllm_ms_server_chunked_prefill_002():
     """
     prompts = ["I love Beijing", "Today is", "Llama is"]
     log_name = "test_vllm_ms_server_chunked_prefill_002.log"
-    process = start_vllm_server(
-        QWEN_7B_MODEL,
-        log_name,
-        extra_params='--max_num_seqs 16 --max-num-batched-tokens 32 ')
-    serve_port = os.getenv("TEST_SERVE_PORT", None)
-    if serve_port:
-        url = f'http://localhost:{serve_port}/v1/completions'
-    else:
-        url = 'http://localhost:8000/v1/completions'
-    data = {
-        "model": QWEN_7B_MODEL,
-        "prompt": prompts,
-        "max_tokens": 100,
-        "top_k": -1,
-        "top_p": 0.95,
-        "temperature": 0.5
-    }
-    json_data = json.dumps(data)
-    response = requests.post(url,
-                             data=json_data,
-                             headers={'Content-Type': 'application/json'})
-    logger.info(response.json())
-    stop_vllm_server(process)
-    assert response.status_code == 200
-    result = get_key_counter_from_log(log_name,
-                                      "Run with native model backend")
-    assert result >= 1
+    extra_params = '--max_num_seqs 16 --max-num-batched-tokens 32 '
+
+    run_ms_server_cp_base_qwen(log_name, extra_params, prompts)
 
 
 @pytest.mark.level1
@@ -231,45 +217,12 @@ def test_vllm_ms_server_chunked_prefill_003():
     Model Info:
         Qwen2.5-7B-Instruct
     """
-    prompts = "I love Beijing, because it is a city with a long history " \
-              "and profound cultural heritage. Walking through its ancient " \
-              "hutongs, one can almost feel the whispers of the past. The " \
-              "Forbidden City, an architectural marvel that once housed " \
-              "emperors, stands as a testament to the city's imperial " \
-              "past. Meanwhile, the Great Wall, though not within the city " \
-              "limits, is easily accessible from Beijing and offers a " \
-              "glimpse into the strategic genius and resilience of ancient " \
-              "China."
+    prompts = LONG_PROMPT
     log_name = "test_vllm_ms_server_chunked_prefill_003.log"
-    process = start_vllm_server(
-        QWEN_7B_MODEL,
-        log_name,
-        start_mode='serve',
-        extra_params='--tensor_parallel_size=2 --max_num_seqs 16 '
-        '--max-num-batched-tokens 32')
-    serve_port = os.getenv("TEST_SERVE_PORT", None)
-    if serve_port:
-        url = f'http://localhost:{serve_port}/v1/completions'
-    else:
-        url = 'http://localhost:8000/v1/completions'
-    data = {
-        "model": QWEN_7B_MODEL,
-        "prompt": prompts,
-        "max_tokens": 100,
-        "top_k": -1,
-        "top_p": 0.95,
-        "temperature": 0.5
-    }
-    json_data = json.dumps(data)
-    response = requests.post(url,
-                             data=json_data,
-                             headers={'Content-Type': 'application/json'})
-    logger.info(response.json())
-    stop_vllm_server(process)
-    assert response.status_code == 200
-    result = get_key_counter_from_log(log_name,
-                                      "Run with native model backend")
-    assert result >= 1
+    extra_params = '--tensor_parallel_size=2 --max_num_seqs 16 '
+    '--max-num-batched-tokens 32'
+
+    run_ms_server_cp_base_qwen(log_name, extra_params, prompts)
 
 
 @pytest.mark.level1
@@ -281,54 +234,39 @@ def test_vllm_ms_server_chunked_prefill_004():
     Test Summary:
         在线native Qwen2.5网络使用默认方式启动
         下发多batch, 超过max_num_batched_tokens
-
     Expected Result:
         运行成功，推理结果正常
     Model Info:
         Qwen2.5-7B-Instruct
     """
-    prompt1 = "I love Beijing, because it is a city with a long history " \
-              "and profound cultural heritage. Walking through its ancient " \
-              "hutongs, one can almost feel the whispers of the past. The " \
-              "Forbidden City, an architectural marvel that once housed " \
-              "emperors, stands as a testament to the city's imperial " \
-              "past. Meanwhile, the Great Wall, though not within the city " \
-              "limits, is easily accessible from Beijing and offers a " \
-              "glimpse into the strategic genius and resilience of ancient " \
-              "China."
-
+    prompt1 = LONG_PROMPT
     prompt2 = "Today is"
     prompt3 = "Llama is"
-
     prompts = [prompt1, prompt2, prompt3]
     log_name = "test_vllm_ms_server_chunked_prefill_004.log"
+    extra_params = '--max_num_seqs 16 --max-num-batched-tokens 32 '
+
+    run_ms_server_cp_base_qwen(log_name, extra_params, prompts)
+
+
+def run_server_chunked_prefill_005(log_name):
     process = start_vllm_server(
         QWEN_7B_MODEL,
         log_name,
-        extra_params='--max_num_seqs 16 --max-num-batched-tokens 32 ')
-    serve_port = os.getenv("TEST_SERVE_PORT", None)
-    if serve_port:
-        url = f'http://localhost:{serve_port}/v1/completions'
-    else:
-        url = 'http://localhost:8000/v1/completions'
-    data = {
-        "model": QWEN_7B_MODEL,
-        "prompt": prompts,
-        "max_tokens": 100,
-        "top_k": -1,
-        "top_p": 0.95,
-        "temperature": 0.5
-    }
-    json_data = json.dumps(data)
-    response = requests.post(url,
-                             data=json_data,
-                             headers={'Content-Type': 'application/json'})
-    logger.info(response.json())
+        start_mode='serve',
+        extra_params='--tensor_parallel_size=2 --max_num_seqs 16 '
+        '--max-num-batched-tokens 32')
+    test_results = run_combination_accuracy(model=QWEN_7B_MODEL,
+                                            is_service=True,
+                                            batches=[1, 4],
+                                            concurrency_levels=[1, 5],
+                                            seq_lengths=[5, 50],
+                                            formats=["prompt", "chat"],
+                                            languages=["english", "chinese"],
+                                            ignored_basic_check=False,
+                                            model_max_token=32768)
     stop_vllm_server(process)
-    assert response.status_code == 200
-    result = get_key_counter_from_log(log_name,
-                                      "Run with native model backend")
-    assert result >= 1
+    return test_results
 
 
 @pytest.mark.level1
@@ -343,20 +281,5 @@ def test_vllm_ms_server_chunked_prefill_005():
         Qwen2.5-7B-Instruct
     """
     log_name = "test_vllm_ms_server_chunked_prefill_005.log"
-    process = start_vllm_server(
-        QWEN_7B_MODEL,
-        log_name,
-        start_mode='serve',
-        extra_params='--tensor_parallel_size=2 --enable-chunked-prefill '
-        '--max_num_seqs 16 --max-num-batched-tokens 32')
-    test_results = run_combination_accuracy(model=QWEN_7B_MODEL,
-                                            is_service=True,
-                                            batches=[1, 4],
-                                            concurrency_levels=[1, 5],
-                                            seq_lengths=[5, 50],
-                                            formats=["prompt", "chat"],
-                                            languages=["english", "chinese"],
-                                            ignored_basic_check=False,
-                                            model_max_token=32768)
-    stop_vllm_server(process)
+    test_results = run_server_chunked_prefill_005(log_name)
     assert test_results.get('failure') == 0
