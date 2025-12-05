@@ -26,6 +26,7 @@ import mindspore as ms
 import numpy as np
 from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore._c_expression.typing import Type as MSDtype
+from mindspore.common.initializer import initializer
 from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size,
@@ -92,14 +93,10 @@ class UnquantizedLinearMethod(LinearMethodBase):
     def create_weights(self, layer: nn.Cell, input_size_per_partition: int,
                        output_partition_sizes: list[int], input_size: int,
                        output_size: int, params_dtype, **extra_weight_attrs):
-        weight = Parameter(
-            mint.zeros(
-                (int(sum(output_partition_sizes)),
-                 int(input_size_per_partition)),
-                dtype=params_dtype,
-            ),
-            requires_grad=False,
-        )
+        weight_shape = (int(sum(output_partition_sizes)),
+                        int(input_size_per_partition))
+        weight = Parameter(initializer("zeros", weight_shape, params_dtype),
+                           requires_grad=False)
         self.input_size_per_partition = int(input_size_per_partition)
         self.output_size_per_partition = int(sum(output_partition_sizes))
         set_weight_attrs(weight, {"input_dim": 1, "output_dim": 0})

@@ -70,6 +70,10 @@ import vllm.attention.selector
 
 vllm.attention.selector.current_platform = ascend_platform
 
+from vllm_mindspore.model_executor.utils import set_weight_attrs
+
+vllm.model_executor.utils.set_weight_attrs = set_weight_attrs
+
 import vllm.v1.engine.core
 from vllm_mindspore.v1.engine.core import shutdown
 
@@ -184,6 +188,12 @@ vllm.model_executor.model_loader.default_loader.get_model_architecture = (
     get_ms_model_architecture)
 vllm.model_executor.model_loader.utils.device_loading_context = (
     ms_device_loading_context)
+
+from vllm_mindspore.model_executor.model_loader.utils import initialize_model
+
+vllm.model_executor.model_loader.utils.initialize_model = initialize_model
+vllm.model_executor.model_loader.base_loader.initialize_model = (
+    initialize_model)
 
 from vllm_mindspore.utils import get_dtype_size
 
